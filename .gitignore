@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.DS_Store
+
+# Large or reproducible Fermi products: keep only their generating code/config.
+rawdata/
+products*/
+logs/
+sbatch/
+*.fits
+*.npy
+*.log
+*.par

@@ -1,0 +1,28 @@
+# Fixed settings for the Kes 27 project.
+analysis:
+  target: kes27
+  ra: 237.083
+  dec: -53.8167
+  roi_radius: 15.0
+  emin: 100.0       # MeV; change this value for a new full-band threshold
+  emax: 500000.0     # MeV
+  zmax: 90
+  evclass: 128
+  evtype: 3
+  irfs: P8R3_SOURCE_V3
+  mapsize_deg: 10.0
+  binsz: 0.1
+
+paths:
+  template_dir: ../data_template
+  rawdata_dir: ../rawdata
+  products_dir: ../products_{energy_label}
+  log_dir: ../logs
+
+files:
+  ltcube: ../data_template/kes27_ltcube.fits
+  catalog: gll_psc_16yr_v38.xml
+  galactic: gll_iem_v07.fits
+  isotropic: iso_P8R3_SOURCE_V3_v1.txt
+  # base_gti: "../products_100MeV/kes27_100MeV_gti.fits"
+  # sed_model: "{products_dir}/kes27_sedtem-pl_fixed.xml"
