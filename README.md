@@ -36,10 +36,10 @@ Fermitools、Fermipy、NumPy、PyYAML、regions、matplotlib 等科学依赖应�
 ```bash
 conda activate fermi
 cd /path/to/fermiflow
-python -m pip install -e . --no-deps
+python -m pip install . --no-deps --no-build-isolation
 ```
 
-这是 editable install：修改仓库中脚本后通常不需要再次安装。
+这是普通安装，不会在超算保留本地仓库 checkout。
 
 ```bash
 fermiflow --help
@@ -233,34 +233,31 @@ bash scripts/download.sh urls.txt rawdata 6
 GitHub 是唯一代码源：
 
 ```text
-本地编辑 → commit → push → 超算安全更新 → 提交任务
+本地编辑 → commit → push → 超算从 GitHub 普通安装/升级 → 提交任务
 ```
 
-超算首次设置一次：
+在超算安装或更新：
 
 ```bash
-git clone https://github.com/whjing/fermiflow.git /share/home/whjing/gits_repo/fermiflow
-cd /share/home/whjing/gits_repo/fermiflow
-bash scripts/cluster_bootstrap.sh
+conda activate fermi
+python -m pip install --upgrade --no-deps --no-build-isolation \
+  "git+https://github.com/whjing/fermiflow.git@main"
 ```
 
-本机终端设置：
+pip 只会临时取得 GitHub 内容并安装到当前 `fermi` 环境；不会在你的 home 目录留下仓库 checkout。`fermiflow` 命令、Fermitools 主流程、空间拟合和下载脚本都会一并安装。
 
-```bash
-export FERMIFLOW_REMOTE_HOST='whjing@your-login-host'
-export FERMIFLOW_REMOTE_REPO='/share/home/whjing/gits_repo/fermiflow'
-```
-
-每次本地修改后：
+本地每次修改后：
 
 ```bash
 git status
 git add .
 git commit -m "Describe the change"
-bash scripts/push_and_cluster.sh
+git push origin main
 ```
 
-Git 没有 `git --update`；同步脚本实际使用 `git fetch` 与 `git pull --ff-only`。如果超算 checkout 存在未提交改动，它会停止而不会覆盖任何文件。请不要在本机和超算上并行修改同一份代码。
+随后在超算重新执行上面的 `pip install --upgrade` 命令。普通 pip 安装不会自动跟随 GitHub 改动；每次需要新版本时重新安装一次即可。
+
+`scripts/cluster_bootstrap.sh`、`scripts/cluster_update.sh` 和 `scripts/push_and_cluster.sh` 仅保留为旧的 checkout 工作流参考；当前推荐的超算方式不再使用它们。
 
 提交到 Git：代码、YAML、少量 XML 模板、region 和 Slurm 脚本。
 

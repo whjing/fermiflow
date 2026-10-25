@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from importlib import resources
 import subprocess
 import sys
 from pathlib import Path
@@ -10,13 +11,13 @@ from pathlib import Path
 __version__ = "0.1.0"
 
 
-def repository_root() -> Path:
-    """Return the editable-install checkout that contains this module."""
-    return Path(__file__).resolve().parent
+def script_directory() -> Path:
+    """Return the installed directory containing bundled workflow scripts."""
+    return Path(str(resources.files("scripts")))
 
 
 def run_script(script_name: str, script_args: list[str]) -> int:
-    script = repository_root() / "scripts" / script_name
+    script = script_directory() / script_name
     if not script.is_file():
         raise SystemExit(
             f"Cannot find {script}. Reinstall or repair this checkout."
@@ -64,7 +65,7 @@ def main() -> None:
 
     args = parser.parse_args()
     if args.command == "path":
-        print(repository_root())
+        print(script_directory().parent)
         return
 
     if args.command == "init":
