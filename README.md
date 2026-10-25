@@ -19,19 +19,18 @@ fermiflow/
     ├── download.sh               # URL 列表的并行 wget 下载
     ├── fix-sedbin.py             # 依照 TS 固定 SED bin 的低显著性背景源
     ├── plot_sed.py               # 绘制 SED、PL/LogParabola 与近似误差带
-    ├── compute_likelihood.py     # 计算手动输入模型之间的 ΔTS
-    ├── cluster_bootstrap.sh      # 超算首次安装
-    ├── cluster_update.sh         # 超算安全更新代码
-    └── push_and_cluster.sh       # 本地 push 后更新超算
+    └── compute_likelihood.py     # 计算手动输入模型之间的 ΔTS
 ```
 
 没有 `src/` 或额外 Python 包层级。所有实际分析代码都在 `scripts/`；根目录只保留安装入口、说明和打包配置。
 
 `gtlike.par`、`gtsrcmaps.par` 是运行时生成的参数记录，不是项目配置，已不纳入仓库。每个项目只需维护自己的 YAML 文件。
 
-## 安装
+## 本地开发与超算安装
 
-Fermitools、Fermipy、NumPy、PyYAML、regions、matplotlib 等科学依赖应在 Conda 环境中安装。本仓库只安装自身，不用 pip 替换这些依赖。
+你只在本地仓库中修改、测试、提交和 push 代码；超算只安装 GitHub 已发布的版本。Fermitools、Fermipy、NumPy、PyYAML、regions、matplotlib 等科学依赖应预先在目标 Conda 环境中安装。
+
+本地开发时，如需在本机运行命令：
 
 ```bash
 conda activate fermi
@@ -39,7 +38,15 @@ cd /path/to/fermiflow
 python -m pip install . --no-deps --no-build-isolation
 ```
 
-这是普通安装，不会在超算保留本地仓库 checkout。
+超算无需 clone 仓库，直接安装：
+
+```bash
+conda activate fermi
+python -m pip install --upgrade --no-deps --no-build-isolation \
+  "git+https://github.com/whjing/fermiflow.git@main"
+```
+
+pip 只会临时获取 GitHub 源码并安装到当前 `fermi` 环境；它不会在你的 home 目录保留项目 checkout。
 
 ```bash
 fermiflow --help
@@ -49,7 +56,7 @@ fermiflow path
 ## 为新目标创建配置
 
 ```bash
-fermiflow init configs/g328_4_100MeV.yaml
+fermiflow init ../configs/g328_4_100MeV.yaml
 ```
 
 此命令会生成一份不会覆盖已有文件的样本配置。编辑其中的 `target`、`ra`、`dec`、能量范围、数据路径和产品目录。现有 Kes 27 参数可参照：
@@ -72,10 +79,11 @@ analysis:
   binsz: 0.1
 
 paths:
-  template_dir: ../data_template
-  rawdata_dir: ../rawdata
-  products_dir: ../products_{energy_label}
-  log_dir: ../logs
+  common_data_dir: ~/data/fermi
+  project_data_dir: ./data
+  rawdata_dir: ./rawdata
+  products_dir: ./products_{energy_label}
+  log_dir: ./logs
 ```
 
 相对路径相对于运行命令时的当前目录。因此建议在分析项目目录中运行命令，配置内使用稳定的相对路径或绝对路径。
@@ -83,10 +91,26 @@ paths:
 对于首次 SED 分能段拟合，`files:` 还必须设置：
 
 ```yaml
-  ltcube: ../data_template/my_target_ltcube.fits
+  ltcube: "{project_data_dir}/ltcube/my_target_ltcube.fits"
   base_gti: "{products_dir}/{analysis_name}_gti.fits"
-  sed_model: "{products_dir}/my_target_sed_input.xml"
+  sed_model: "{project_data_dir}/models/my_target_sed_input.xml"
 ```
+
+推荐的项目目录是：
+
+```text
+my_project/
+├── configs/                  # 此项目的 YAML
+├── data/
+│   ├── ltcube/               # 可跨本项目复用的 livetime cube
+│   ├── models/               # 固定输入 XML、空间模板
+│   └── regions/              # DS9 region 文件
+├── rawdata/                  # 下载的 photon / spacecraft FITS
+├── products_100MeV/          # 可再生的 Fermitools 产物
+└── logs/
+```
+
+全局目录 `~/data/fermi/` 只放可跨项目共享的文件，例如 `gll_psc_16yr_v38.xml`、`gll_iem_v07.fits`、`iso_P8R3_SOURCE_V3_v1.txt` 和其他公共空间模板。`data/` 则保存只对当前项目有意义、但不想反复生成的输入；其中 `data/ltcube/` 是 ltcube 的推荐位置。
 
 ## Fermitools 主流程
 
@@ -228,23 +252,13 @@ bash scripts/download.sh urls.txt rawdata 6
 
 这三项仍记录当前 Kes 27 的具体文件名和路径。用于新目标时，请复制一份并明确更改输入文件；不要直接让新项目写入 Kes 27 的产品目录。
 
-## 本地编辑与超算调用
+## 本地编辑与超算使用
 
 GitHub 是唯一代码源：
 
 ```text
 本地编辑 → commit → push → 超算从 GitHub 普通安装/升级 → 提交任务
 ```
-
-在超算安装或更新：
-
-```bash
-conda activate fermi
-python -m pip install --upgrade --no-deps --no-build-isolation \
-  "git+https://github.com/whjing/fermiflow.git@main"
-```
-
-pip 只会临时取得 GitHub 内容并安装到当前 `fermi` 环境；不会在你的 home 目录留下仓库 checkout。`fermiflow` 命令、Fermitools 主流程、空间拟合和下载脚本都会一并安装。
 
 本地每次修改后：
 
@@ -255,9 +269,7 @@ git commit -m "Describe the change"
 git push origin main
 ```
 
-随后在超算重新执行上面的 `pip install --upgrade` 命令。普通 pip 安装不会自动跟随 GitHub 改动；每次需要新版本时重新安装一次即可。
-
-`scripts/cluster_bootstrap.sh`、`scripts/cluster_update.sh` 和 `scripts/push_and_cluster.sh` 仅保留为旧的 checkout 工作流参考；当前推荐的超算方式不再使用它们。
+随后在超算重新执行上面的 `pip install --upgrade` 命令。普通 pip 安装不会自动跟随 GitHub 改动；每次需要新版本时重新安装一次即可。安装完成后直接运行 `fermiflow --help` 或具体分析命令。
 
 提交到 Git：代码、YAML、少量 XML 模板、region 和 Slurm 脚本。
 

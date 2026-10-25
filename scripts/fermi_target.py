@@ -124,14 +124,18 @@ class FermiTarget:
             self.dir_products, f"{self.name}_srcmaps.fits"
         )  # source maps file path
 
-        # livetime cube file path setup
-        if path_ltcube is not None and os.path.exists(path_ltcube):
-            self.path_ltcube = path_ltcube
-            print(f"[{self.name}] Using pre-existing ltcube {self.path_ltcube}")
+        # Keep a configured ltcube in the project data directory.  When it
+        # does not exist yet, gtltcube will create it at this exact path.
+        if path_ltcube is not None:
+            self.path_ltcube = os.path.abspath(os.path.expanduser(path_ltcube))
+            if os.path.exists(self.path_ltcube):
+                print(f"[{self.name}] Using pre-existing ltcube {self.path_ltcube}")
         else:
             self.path_ltcube = os.path.join(
                 self.dir_products, f"{self.name}_ltcube.fits"
             )  # livetime cube file path
+
+        os.makedirs(os.path.dirname(self.path_ltcube), exist_ok=True)
 
         # binned exposure map file path 
         self.path_bexpmap = os.path.join(self.dir_products, f"{self.name}_bexpmap.fits")

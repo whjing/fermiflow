@@ -14,15 +14,19 @@ analysis:
   binsz: 0.1
 
 paths:
-  template_dir: ../data_template
-  rawdata_dir: ../rawdata
-  products_dir: ../products_{energy_label}
-  log_dir: ../logs
+  # Shared across all of your Fermi projects: catalog and diffuse templates.
+  common_data_dir: ~/data/fermi
+
+  # Belongs to this project only: reusable ltcube, input XMLs, regions, etc.
+  project_data_dir: ./data
+  rawdata_dir: ./rawdata
+  products_dir: ./products_{energy_label}
+  log_dir: ./logs
 
 files:
-  ltcube: ../data_template/kes27_ltcube.fits
+  ltcube: "{project_data_dir}/ltcube/kes27_ltcube.fits"
   catalog: gll_psc_16yr_v38.xml
   galactic: gll_iem_v07.fits
   isotropic: iso_P8R3_SOURCE_V3_v1.txt
-  # base_gti: "../products_100MeV/kes27_100MeV_gti.fits"
-  # sed_model: "{products_dir}/kes27_sedtem-pl_fixed.xml"
+  # base_gti: "{products_dir}/{analysis_name}_gti.fits"
+  # sed_model: "{project_data_dir}/models/kes27_sed_input.xml"

@@ -52,6 +52,13 @@ def load_project(config_file, emin_override=None, emax_override=None):
     context["analysis_name"] = f"{target}_{context['energy_label']}"
     products_dir = render_path(paths["products_dir"], context)
     context["products_dir"] = str(products_dir)
+    common_data_dir = render_path(
+        paths.get("common_data_dir", paths.get("template_dir", "~/data/fermi")),
+        context,
+    )
+    project_data_dir = render_path(paths.get("project_data_dir", "./data"), context)
+    context["common_data_dir"] = str(common_data_dir)
+    context["project_data_dir"] = str(project_data_dir)
 
     project = {
         "config_file": config_file,
@@ -69,7 +76,8 @@ def load_project(config_file, emin_override=None, emax_override=None):
         "irfs": analysis.get("irfs", "P8R3_SOURCE_V3"),
         "analysis_name": context["analysis_name"],
         "energy_label": context["energy_label"],
-        "template_dir": render_path(paths["template_dir"], context),
+        "common_data_dir": common_data_dir,
+        "project_data_dir": project_data_dir,
         "rawdata_dir": render_path(paths["rawdata_dir"], context),
         "products_dir": products_dir,
         "log_dir": render_path(paths.get("log_dir", "../logs"), context),
@@ -96,8 +104,18 @@ def load_project(config_file, emin_override=None, emax_override=None):
 
 
 def make_target(
-    project, name, output_dir, eminBin=None, emaxBin=None, input_model=None
+    project,
+    name,
+    output_dir,
+    eminBin=None,
+    emaxBin=None,
+    input_model=None,
+    require_ltcube=False,
 ):
+    path_ltcube = project["ltcube"]
+    if path_ltcube is not None and require_ltcube:
+        path_ltcube = require_file(path_ltcube, "Livetime cube")
+
     target = FermiTarget(
         name=name,
         c_ra=project["ra"],
@@ -110,18 +128,14 @@ def make_target(
         evtype=project["evtype"],
         mapsize_deg=project["mapsize_deg"],
         binsz=project["binsz"],
-        dir_template=str(project["template_dir"]),
+        dir_template=str(project["common_data_dir"]),
         dir_rawdata=str(project["rawdata_dir"]),
         dir_products=str(output_dir),
         file_catalog=project["catalog"],
         file_diffuse=project["galactic"],
         file_pointsrc=project["isotropic"],
         irfs=project["irfs"],
-        path_ltcube=(
-            str(require_file(project["ltcube"], "Livetime cube"))
-            if project["ltcube"] is not None
-            else None
-        ),
+        path_ltcube=str(path_ltcube) if path_ltcube is not None else None,
         path_model_input=str(input_model) if input_model else None,
     )
     return target
@@ -146,7 +160,7 @@ def run_prepare(project):
     if os.path.isfile(target.path_ltcube):
         logger.info(f"Reusing configured livetime cube: {target.path_ltcube}")
     else:
-        logger.info("No ltcube specified; generating a new livetime cube.")
+        logger.info("Generating livetime cube: %s", target.path_ltcube)
         target.run_gtltcube()
 
     target.run_gtbin_cmap()
@@ -164,6 +178,7 @@ def run_like(project, input_model):
         project["analysis_name"],
         project["products_dir"],
         input_model=input_model,
+        require_ltcube=True,
     )
     return target.run_gtsrcmap_gtlike2(str(input_model), source_name=project["target"])
 
@@ -255,6 +270,7 @@ def run_tsmap(project, input_model, size, binsz):
         project["analysis_name"],
         project["products_dir"],
         input_model=input_model,
+        require_ltcube=True,
     )
     return target.run_gttsmap(
         path_model=str(input_model), xsize=size, ysize=size, binsz=binsz

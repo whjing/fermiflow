@@ -35,7 +35,42 @@ def write_sample_config(path: Path) -> None:
     if path.exists():
         raise SystemExit(f"Refusing to overwrite existing file: {path}")
 
-    sample = """# Copy this file once per target and edit the marked values.\nanalysis:\n  target: my_target\n  ra: 0.0                 # deg\n  dec: 0.0                # deg\n  roi_radius: 15.0        # deg\n  emin: 100.0             # MeV\n  emax: 500000.0          # MeV\n  zmax: 90\n  evclass: 128\n  evtype: 3\n  irfs: P8R3_SOURCE_V3\n  mapsize_deg: 10.0\n  binsz: 0.1\n\npaths:\n  template_dir: ../data_template\n  rawdata_dir: ../rawdata\n  products_dir: ../products_{energy_label}\n  log_dir: ../logs\n\nfiles:\n  # Set this to null to create a fresh livetime cube during prepare.\n  ltcube: ../data_template/my_target_ltcube.fits\n  catalog: gll_psc_16yr_v38.xml\n  galactic: gll_iem_v07.fits\n  isotropic: iso_P8R3_SOURCE_V3_v1.txt\n\n  # Required only by --mode bin.\n  # base_gti: \"{products_dir}/{analysis_name}_gti.fits\"\n  # sed_model: \"{products_dir}/my_target_sed_input.xml\"\n"""
+    sample = """# Copy this file once per target and edit the marked values.
+analysis:
+  target: my_target
+  ra: 0.0                 # deg
+  dec: 0.0                # deg
+  roi_radius: 15.0        # deg
+  emin: 100.0             # MeV
+  emax: 500000.0          # MeV
+  zmax: 90
+  evclass: 128
+  evtype: 3
+  irfs: P8R3_SOURCE_V3
+  mapsize_deg: 10.0
+  binsz: 0.1
+
+paths:
+  # Shared across projects: catalog and diffuse backgrounds.
+  common_data_dir: ~/data/fermi
+
+  # Reusable inputs for this project only.
+  project_data_dir: ./data
+  rawdata_dir: ./rawdata
+  products_dir: ./products_{energy_label}
+  log_dir: ./logs
+
+files:
+  # Created here by prepare if it does not already exist.
+  ltcube: "{project_data_dir}/ltcube/my_target_ltcube.fits"
+  catalog: gll_psc_16yr_v38.xml
+  galactic: gll_iem_v07.fits
+  isotropic: iso_P8R3_SOURCE_V3_v1.txt
+
+  # Required only by --mode bin.
+  # base_gti: "{products_dir}/{analysis_name}_gti.fits"
+  # sed_model: "{project_data_dir}/models/my_target_sed_input.xml"
+"""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(sample, encoding="utf-8")
     print(f"Created sample project configuration: {path}")
