@@ -112,9 +112,9 @@ def edited_model(project, input_model, model_policy):
 
     policy = dict(model_policy)
     output_model = default_output_path(input_model)
-    summary = apply_model_policy(input_model, output_model, policy)
+    _, free_parameters = apply_model_policy(input_model, output_model, policy)
     logger.info("Model policy applied: %s -> %s", input_model, output_model)
-    logger.info("Model policy changed %d parameters.", sum(item[2] for item in summary))
+    logger.info("Free parameters in edited model: %d", free_parameters)
     return output_model
 
 

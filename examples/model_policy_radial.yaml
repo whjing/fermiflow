@@ -13,5 +13,12 @@ radial:
 background_norms: [gll_iem_v07, iso_P8R3_SOURCE_V3_v1]
 
 # Explicit names override radial rules.
-sources:
-  kes27: all
+# sources:
+#   kes27: all
+
+# Optional: sources with TS below this threshold are fixed before the radial
+# rule is applied.  The log path is relative to this policy YAML file.
+# ts_filter:
+#   log_file: ../logs/gtlike/gtlike-final.out
+#   threshold: 1.0
+#   policy: fixed

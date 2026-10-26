@@ -62,7 +62,7 @@ paths:
 
 files:
   # Created here by prepare if it does not already exist.
-  ltcube: "{project_data_dir}/ltcube/my_target_ltcube.fits"
+  ltcube: "{project_data_dir}/{target}_ltcube.fits"
   catalog: gll_psc_16yr_v38.xml
   galactic: gll_iem_v07.fits
   isotropic: iso_P8R3_SOURCE_V3_v1.txt

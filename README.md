@@ -93,7 +93,7 @@ paths:
 对于首次 SED 分能段拟合，`files:` 还必须设置：
 
 ```yaml
-  ltcube: "{project_data_dir}/ltcube/my_target_ltcube.fits"
+  ltcube: "{project_data_dir}/{target}_ltcube.fits"
   base_gti: "{products_dir}/{analysis_name}_gti.fits"
   sed_model: "{project_data_dir}/models/my_target_sed_input.xml"
 ```
@@ -104,7 +104,7 @@ paths:
 my_project/
 ├── configs/                  # 此项目的 YAML
 ├── data/
-│   ├── ltcube/               # 可跨本项目复用的 livetime cube
+│   ├── my_target_ltcube.fits # 可跨本项目复用的 livetime cube
 │   ├── models/               # 固定输入 XML、空间模板
 │   └── regions/              # DS9 region 文件
 ├── rawdata/                  # 下载的 photon / spacecraft FITS
@@ -112,7 +112,7 @@ my_project/
 └── logs/
 ```
 
-全局目录 `~/data/fermi/` 只放可跨项目共享的文件，例如 `gll_psc_16yr_v38.xml`、`gll_iem_v07.fits`、`iso_P8R3_SOURCE_V3_v1.txt` 和其他公共空间模板。`data/` 则保存只对当前项目有意义、但不想反复生成的输入；其中 `data/ltcube/` 是 ltcube 的推荐位置。
+全局目录 `~/data/fermi/` 只放可跨项目共享的文件，例如 `gll_psc_16yr_v38.xml`、`gll_iem_v07.fits`、`iso_P8R3_SOURCE_V3_v1.txt` 和其他公共空间模板。`data/` 则保存只对当前项目有意义、但不想反复生成的输入。配置 `ltcube: "{project_data_dir}/{target}_ltcube.fits"` 后，`prepare` 会直接在 `data/` 下创建或复用该文件。
 
 ## Fermitools 主流程
 
@@ -199,8 +199,8 @@ fermiflow run -- \
 
 `scripts/model_editor.py` 不依赖 Fermitools 或 Fermipy；它只读取一个 XML、按策略写出一个新的 XML。原输入模型保持不变。它支持三种策略：
 
-- `all`：该源所有谱与空间参数均放开；
-- `norm`：只放开谱归一化参数，其余参数固定；
+- `all`：放开归一化和谱形参数，如 `Prefactor`/`norm`、`Index`、`alpha`、`beta`；`Eb`、`Scale` 和全部空间参数固定；
+- `norm`：只放开谱归一化参数，其余谱参数与空间参数固定；
 - `fixed`：该源所有参数固定。
 
 例如，把下面内容单独保存为 `configs/model_policy.yaml`。它不属于项目总 YAML。该例会将目标中心 3° 以内的源全部放开，3°--5° 的源只放开归一化，5° 外固定，同时使 Galactic 与 isotropic 背景只放开归一化：
@@ -229,6 +229,17 @@ sources:
 background_norms: [gll_iem_v07, iso_P8R3_SOURCE_V3_v1]
 ```
 
+如果已有一次 gtlike 的日志，其中逐源输出了 `TS value:`，可让低 TS 源优先固定。例如：
+
+```yaml
+ts_filter:
+  log_file: ../logs/gtlike/gtlike-final.out
+  threshold: 1.0
+  policy: fixed
+```
+
+`log_file` 相对本策略 YAML 文件解析。显式的 `sources:` 和 `background_norms:` 优先级高于 TS 筛选；其余 `TS < 1` 的源固定，剩余源再执行半径分区。
+
 单独生成模型时，把上面的内容保存为 `model_policy.yaml`，运行：
 
 ```bash
@@ -244,6 +255,7 @@ fermiflow model -- \
 fermiflow model -- \
   --input-model data/models/target_input.xml \
   --free-all-within 3 --free-norm-until 5 \
+  --ts-log ../logs/gtlike/gtlike-final.out --ts-threshold 1 \
   --background-norm gll_iem_v07 \
   --background-norm iso_P8R3_SOURCE_V3_v1 \
   --source-policy kes27=all

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import math
+import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -21,6 +22,8 @@ NORMALIZATION_NAMES = {
     "value",
     "amplitude",
 }
+
+FIXED_SPECTRAL_NAMES = {"eb", "scale", "pivotenergy", "pivot_energy", "energyscale"}
 
 
 def angular_separation_deg(ra1, dec1, ra2, dec2):
@@ -37,6 +40,14 @@ def source_position(source):
     """Return (RA, DEC) for sources with a SkyDir-like spatial model."""
     spatial = source.find("spatialModel")
     if spatial is None:
+        return None
+
+    parameters = {
+        item.get("name", "").upper(): item for item in spatial.findall("parameter")
+    }
+    try:
+        return float(parameters["RA"].get("value")), float(parameters["DEC"].get("value"))
+    except (KeyError, TypeError, ValueError):
         return None
 
 
@@ -60,15 +71,12 @@ def source_distance_deg(source, radial):
     except (TypeError, ValueError):
         return None
 
-    parameters = {item.get("name", "").upper(): item for item in spatial.findall("parameter")}
-    try:
-        return float(parameters["RA"].get("value")), float(parameters["DEC"].get("value"))
-    except (KeyError, TypeError, ValueError):
-        return None
-
-
 def set_source_policy(source, policy):
-    """Set one source to ``all``, ``norm``, or ``fixed`` and return changes."""
+    """Set one source's spectral freedom and return the number of changes.
+
+    ``all`` means all fitted spectral parameters except the pivot/scale energy;
+    spatial parameters remain fixed in every policy.
+    """
     policy = policy.lower()
     if policy not in {"all", "norm", "fixed"}:
         raise ValueError(f"Unknown parameter policy: {policy}")
@@ -86,16 +94,20 @@ def set_source_policy(source, policy):
             norm_parameter = parameters[0] if parameters else None
 
     for parameter in source.iter("parameter"):
-        new_value = "1" if policy == "all" else "0"
-        if policy == "norm" and parameter is norm_parameter:
-            new_value = "1"
+        new_value = "0"
+        if parameter in (spectrum.findall("parameter") if spectrum is not None else []):
+            name = parameter.get("name", "").lower()
+            if policy == "all" and name not in FIXED_SPECTRAL_NAMES:
+                new_value = "1"
+            elif policy == "norm" and parameter is norm_parameter:
+                new_value = "1"
         if parameter.get("free") != new_value:
             parameter.set("free", new_value)
             changed += 1
     return changed
 
 
-def policy_for_source(source, config):
+def policy_for_source(source, config, ts_values):
     """Resolve one source's policy; explicit source rules take precedence."""
     name = source.get("name", "")
     explicit = config.get("sources", {})
@@ -105,6 +117,10 @@ def policy_for_source(source, config):
     background_norms = set(config.get("background_norms", []))
     if name in background_norms:
         return "norm"
+
+    ts_filter = config.get("ts_filter", {})
+    if name in ts_values and ts_values[name] < float(ts_filter.get("threshold", 0)):
+        return ts_filter.get("policy", "fixed")
 
     radial = config.get("radial")
     if radial:
@@ -118,6 +134,28 @@ def policy_for_source(source, config):
     return config.get("default_policy", "fixed")
 
 
+def read_ts_values(log_file):
+    """Read ``source name -> TS`` pairs from the existing fit-summary log format."""
+    source_pattern = re.compile(r"\|\s+INFO\s+\|\s+(.+?):\s*$")
+    ts_pattern = re.compile(r"\|\s+INFO\s+\|\s+TS value:\s+([-+0-9.eE]+)")
+    values = {}
+    current_source = None
+    for line in Path(log_file).read_text(encoding="utf-8", errors="replace").splitlines():
+        source_match = source_pattern.search(line)
+        if source_match:
+            current_source = source_match.group(1).strip()
+            continue
+        ts_match = ts_pattern.search(line)
+        if ts_match and current_source:
+            values[current_source] = float(ts_match.group(1))
+            current_source = None
+    return values
+
+
+def count_free_parameters(root):
+    return sum(parameter.get("free") == "1" for parameter in root.iter("parameter"))
+
+
 def apply_model_policy(input_model, output_model, config):
     """Apply a YAML-compatible policy dictionary and write a new XML model."""
     input_model = Path(input_model).expanduser().resolve()
@@ -125,16 +163,18 @@ def apply_model_policy(input_model, output_model, config):
     tree = ET.parse(input_model)
     root = tree.getroot()
     summary = []
+    ts_filter = config.get("ts_filter", {})
+    ts_values = read_ts_values(ts_filter["log_file"]) if ts_filter.get("log_file") else {}
 
     for source in root.findall("source"):
-        policy = policy_for_source(source, config)
+        policy = policy_for_source(source, config, ts_values)
         changed = set_source_policy(source, policy)
         summary.append((source.get("name", ""), policy, changed))
 
     output_model.parent.mkdir(parents=True, exist_ok=True)
     ET.indent(tree, space="  ")
     tree.write(output_model, encoding="UTF-8", xml_declaration=True)
-    return summary
+    return summary, count_free_parameters(root)
 
 
 def default_output_path(input_model):
@@ -146,9 +186,19 @@ def load_model_policy(policy_file):
     """Read one standalone policy YAML; ``model_edit:`` is accepted for compatibility."""
     import yaml
 
-    with Path(policy_file).expanduser().open(encoding="utf-8") as handle:
+    policy_file = Path(policy_file).expanduser().resolve()
+    with policy_file.open(encoding="utf-8") as handle:
         policy = yaml.safe_load(handle) or {}
-    return policy.get("model_edit", policy)
+    policy = policy.get("model_edit", policy)
+    ts_filter = policy.get("ts_filter", {})
+    if ts_filter.get("log_file"):
+        ts_filter = dict(ts_filter)
+        log_file = Path(ts_filter["log_file"]).expanduser()
+        ts_filter["log_file"] = str(
+            log_file if log_file.is_absolute() else (policy_file.parent / log_file).resolve()
+        )
+        policy["ts_filter"] = ts_filter
+    return policy
 
 
 def direct_policy(args):
@@ -156,6 +206,12 @@ def direct_policy(args):
     policy = {"default_policy": args.default_policy}
     if args.background_norm:
         policy["background_norms"] = args.background_norm
+    if args.ts_log:
+        policy["ts_filter"] = {
+            "log_file": str(args.ts_log.expanduser().resolve()),
+            "threshold": args.ts_threshold,
+            "policy": args.ts_policy,
+        }
 
     source_rules = {}
     for item in args.source_policy:
@@ -200,6 +256,9 @@ def parse_args():
     parser.add_argument("--default-policy", choices=("all", "norm", "fixed"), default="fixed")
     parser.add_argument("--source-policy", action="append", default=[], metavar="NAME=POLICY")
     parser.add_argument("--background-norm", action="append", default=[], metavar="NAME")
+    parser.add_argument("--ts-log", type=Path, help="Fit log containing per-source TS value lines.")
+    parser.add_argument("--ts-threshold", type=float, default=1.0)
+    parser.add_argument("--ts-policy", choices=("all", "norm", "fixed"), default="fixed")
     return parser.parse_args()
 
 
@@ -207,11 +266,10 @@ def main():
     args = parse_args()
     policy = load_model_policy(args.policy) if args.policy else direct_policy(args)
     output_model = args.output_model or default_output_path(args.input_model)
-    summary = apply_model_policy(args.input_model, output_model, policy)
+    _, free_parameters = apply_model_policy(args.input_model, output_model, policy)
     print(f"Input model : {args.input_model.expanduser().resolve()}")
     print(f"Output model: {output_model.expanduser().resolve()}")
-    for name, source_policy, changed in summary:
-        print(f"{name:<35} {source_policy:<6} changed={changed}")
+    print(f"Free parameters in output model: {free_parameters}")
 
 
 if __name__ == "__main__":
