@@ -9,6 +9,7 @@ output path equal to the input path is requested.
 from __future__ import annotations
 
 import argparse
+import ast
 import math
 import re
 import xml.etree.ElementTree as ET
@@ -134,21 +135,26 @@ def policy_for_source(source, config, ts_values):
     return config.get("default_policy", "fixed")
 
 
-def read_ts_values(log_file):
-    """Read ``source name -> TS`` pairs from the existing fit-summary log format."""
-    source_pattern = re.compile(r"\|\s+INFO\s+\|\s+(.+?):\s*$")
-    ts_pattern = re.compile(r"\|\s+INFO\s+\|\s+TS value:\s+([-+0-9.eE]+)")
+def read_ts_values(results_file):
+    """Read ``source name -> TS`` pairs from a gtlike ``*_results.dat`` file."""
+    text = Path(results_file).read_text(encoding="utf-8", errors="replace")
+    try:
+        parsed = ast.literal_eval(text)
+        return {
+            name: float(values["TS value"])
+            for name, values in parsed.items()
+            if "TS value" in values
+        }
+    except (SyntaxError, ValueError, TypeError, AttributeError):
+        pass
+
+    source_pattern = re.compile(r"['\"](?P<name>[^'\"]+)['\"]\s*:\s*\{(?P<body>.*?)\}", re.DOTALL)
+    ts_pattern = re.compile(r"['\"]TS value['\"]\s*:\s*['\"]?([-+0-9.eE]+)")
     values = {}
-    current_source = None
-    for line in Path(log_file).read_text(encoding="utf-8", errors="replace").splitlines():
-        source_match = source_pattern.search(line)
-        if source_match:
-            current_source = source_match.group(1).strip()
-            continue
-        ts_match = ts_pattern.search(line)
-        if ts_match and current_source:
-            values[current_source] = float(ts_match.group(1))
-            current_source = None
+    for source_match in source_pattern.finditer(text):
+        ts_match = ts_pattern.search(source_match.group("body"))
+        if ts_match:
+            values[source_match.group("name")] = float(ts_match.group(1))
     return values
 
 
@@ -164,7 +170,11 @@ def apply_model_policy(input_model, output_model, config):
     root = tree.getroot()
     summary = []
     ts_filter = config.get("ts_filter", {})
-    ts_values = read_ts_values(ts_filter["log_file"]) if ts_filter.get("log_file") else {}
+    ts_values = (
+        read_ts_values(ts_filter["results_file"])
+        if ts_filter.get("results_file")
+        else {}
+    )
 
     for source in root.findall("source"):
         policy = policy_for_source(source, config, ts_values)
@@ -191,11 +201,13 @@ def load_model_policy(policy_file):
         policy = yaml.safe_load(handle) or {}
     policy = policy.get("model_edit", policy)
     ts_filter = policy.get("ts_filter", {})
-    if ts_filter.get("log_file"):
+    if ts_filter.get("results_file"):
         ts_filter = dict(ts_filter)
-        log_file = Path(ts_filter["log_file"]).expanduser()
-        ts_filter["log_file"] = str(
-            log_file if log_file.is_absolute() else (policy_file.parent / log_file).resolve()
+        results_file = Path(ts_filter["results_file"]).expanduser()
+        ts_filter["results_file"] = str(
+            results_file
+            if results_file.is_absolute()
+            else (policy_file.parent / results_file).resolve()
         )
         policy["ts_filter"] = ts_filter
     return policy
@@ -206,9 +218,9 @@ def direct_policy(args):
     policy = {"default_policy": args.default_policy}
     if args.background_norm:
         policy["background_norms"] = args.background_norm
-    if args.ts_log:
+    if args.ts_results:
         policy["ts_filter"] = {
-            "log_file": str(args.ts_log.expanduser().resolve()),
+            "results_file": str(args.ts_results.expanduser().resolve()),
             "threshold": args.ts_threshold,
             "policy": args.ts_policy,
         }
@@ -259,7 +271,7 @@ def parse_args():
     parser.add_argument("--default-policy", choices=("spectral", "norm", "fixed"), default="fixed")
     parser.add_argument("--source-policy", action="append", default=[], metavar="NAME=POLICY")
     parser.add_argument("--background-norm", action="append", default=[], metavar="NAME")
-    parser.add_argument("--ts-log", type=Path, help="Fit log containing per-source TS value lines.")
+    parser.add_argument("--ts-results", type=Path, help="gtlike *_results.dat file containing per-source TS values.")
     parser.add_argument("--ts-threshold", type=float, default=1.0)
     parser.add_argument("--ts-policy", choices=("spectral", "norm", "fixed"), default="fixed")
     return parser.parse_args()

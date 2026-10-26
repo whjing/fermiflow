@@ -17,8 +17,8 @@ background_norms: [gll_iem_v07, iso_P8R3_SOURCE_V3_v1]
 #   kes27: spectral
 
 # Optional: sources with TS below this threshold are fixed before the radial
-# rule is applied.  The log path is relative to this policy YAML file.
+# rule is applied.  The results path is relative to this policy YAML file.
 # ts_filter:
-#   log_file: ../logs/gtlike/gtlike-final.out
+#   results_file: ../products_1GeV/target_minuit_results.dat
 #   threshold: 1.0
 #   policy: fixed

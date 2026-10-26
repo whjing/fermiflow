@@ -229,16 +229,16 @@ sources:
 background_norms: [gll_iem_v07, iso_P8R3_SOURCE_V3_v1]
 ```
 
-如果已有一次 gtlike 的日志，其中逐源输出了 `TS value:`，可让低 TS 源优先固定。例如：
+如果已有一次 gtlike 输出的 `*_results.dat` 文件，可直接让低 TS 源优先固定。例如：
 
 ```yaml
 ts_filter:
-  log_file: ../logs/gtlike/gtlike-final.out
+  results_file: ../products_1GeV/target_minuit_results.dat
   threshold: 1.0
   policy: fixed
 ```
 
-`log_file` 相对本策略 YAML 文件解析。显式的 `sources:` 和 `background_norms:` 优先级高于 TS 筛选；其余 `TS < 1` 的源固定，剩余源再执行半径分区。
+`results_file` 相对本策略 YAML 文件解析。显式的 `sources:` 和 `background_norms:` 优先级高于 TS 筛选；其余 `TS < 1` 的源固定，剩余源再执行半径分区。
 
 单独生成模型时，把上面的内容保存为 `model_policy.yaml`，运行：
 
@@ -255,7 +255,7 @@ fermiflow model -- \
 fermiflow model -- \
   --input-model data/models/target_input.xml \
   --free-spectral-within 3 --free-norm-until 5 \
-  --ts-log ../logs/gtlike/gtlike-final.out --ts-threshold 1 \
+  --ts-results ../products_1GeV/target_minuit_results.dat --ts-threshold 1 \
   --background-norm gll_iem_v07 \
   --background-norm iso_P8R3_SOURCE_V3_v1 \
   --source-policy kes27=spectral
