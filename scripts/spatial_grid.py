@@ -747,6 +747,12 @@ def read_ds9_contours(contour_file):
     return contours
 
 
+def region_label(region):
+    """Keep only the source name in plot labels, not DS9 fit annotations."""
+    text = str(region.meta.get("text", "")).strip()
+    return re.split(r"\s+(?:pos_)?r68=", text, maxsplit=1)[0]
+
+
 def plot_grid(config_path):
     """Plot completed DS9 regions over the optional TS map declared in YAML."""
     try:
@@ -819,7 +825,7 @@ def plot_grid(config_path):
         for region in Regions.read(row["region_file"], format="ds9"):
             axis.add_artist(region.to_pixel(wcs).as_artist(linewidth=1.5))
             if isinstance(region, CircleSkyRegion):
-                text = region.meta.get("text", "")
+                text = region_label(region)
                 if text:
                     axis.text(
                         region.center.ra.deg,
