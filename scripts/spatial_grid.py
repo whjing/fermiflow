@@ -448,7 +448,9 @@ def generate_grid(config_path):
                 continue
             set_source_spatial_model(source, choice["model"], source_config.get("seed"))
 
-        model_path = model_dir / f"{tag}_input.xml"
+        # This XML belongs to the Fermipy spatial stage.  Reserve *_input.xml
+        # for the later Fermitools/gtlike stage.
+        model_path = model_dir / f"{tag}_spatial.xml"
         ET.indent(tree, space="  ")
         tree.write(model_path, encoding="UTF-8", xml_declaration=True)
 

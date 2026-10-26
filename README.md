@@ -324,7 +324,7 @@ fermiflow spatial-grid --config ../configs/spatial_grid.yaml
 
 ```text
 products_1GeV/spatial_grid/
-├── models/<tag>_input.xml
+├── models/<tag>_spatial.xml
 ├── configs/spatial_<tag>.yaml
 ├── <tag>/                         # 每个组合的 Fermipy 输出目录
 └── spatial_grid_manifest.csv
