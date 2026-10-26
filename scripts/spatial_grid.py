@@ -458,7 +458,10 @@ def generate_grid(config_path):
         spatial_config["output"] = str(output_dir)
         spatial_config["sources"] = grid_sources(source_configs, choices)
         spatial_config.setdefault("outputs", {})
-        region_name = spatial_config["outputs"].setdefault("region_file", "spatial_fit_final.reg")
+        # A tag-specific region filename makes copied/collected regions
+        # unambiguous even outside their individual output directories.
+        region_name = f"{tag}.reg"
+        spatial_config["outputs"]["region_file"] = region_name
         spatial_config["outputs"].setdefault("model_name", "spatial_fit_final")
 
         config_file = config_dir / f"spatial_{tag}.yaml"

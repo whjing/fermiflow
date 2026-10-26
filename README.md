@@ -342,6 +342,20 @@ bash ../sbatch/spatial_grid/submit_spatial_grid.sh
 
 `spatial_grid_manifest.csv` 保留 tag、每个源实际使用的模型、XML、单模型 YAML、输出目录、region 文件和 sbatch 文件路径。后续比较 likelihood、TS、定位结果和延展半径时，应从该表读取组合信息，而不是依赖文件名猜测模型。
 
+每个自动生成的单组合 YAML 都会将 `sources:` 写成该组合实际需要拟合的源。例如：
+
+```yaml
+sources:
+  - name: g328
+    spatial_model: PointSource
+    localization: {}
+  - name: extend
+    spatial_model: RadialGaussian
+    extension: {}
+```
+
+这表示对 `g328` 执行点源定位（`localize`），对 `extend` 执行 Gaussian 延展拟合（`extension`）；空字典表示继承空间模板 YAML 顶层 `localize:`、`extension:` 中的默认设置。每个组合的最终 XML 仍统一命名为 `spatial_fit_final.xml`，但 DS9 region 使用完整 tag，例如 `g328-point-extend-gaussian.reg`，便于将 region 文件移出原目录后仍能辨认其模型组合。
+
 ### 以重新定位后的 XML 批量运行 gtlike
 
 空间组合的 raw likelihood 不应直接来自初始坐标的 XML。推荐顺序是：先完成全部 Fermipy spatial 任务，检查定位和延展结果，再将每个组合的 `spatial_fit_final.xml` 用作该组合的 gtlike 输入。
