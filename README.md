@@ -219,21 +219,21 @@ ts_filter:
 单独生成模型时，把上面的内容保存为 `model_policy.yaml`，运行：
 
 ```bash
-fermiflow model -- --input-model ../data/models/target_input.xml --policy ../configs/model_policy.yaml --output-model ../data/models/target_freeing_input.xml
+fermiflow model --input-model ../data/models/target_input.xml --policy ../configs/model_policy.yaml --output-model ../data/models/target_freeing_input.xml
 ```
 
 若不写 `--output-model`，会自动创建同目录的 `target_input_edited.xml`。也可以完全不另建 YAML，直接在终端设定同一规则：
 
 ```bash
-fermiflow model -- --input-model ../data/models/target_input.xml --free-spectral-within 3 --free-norm-until 5 --ts-results ../products_1GeV/target_minuit_results.dat --ts-threshold 1 --background-norm gll_iem_v07 --background-norm iso_P8R3_SOURCE_V3_v1 --source-policy kes27=spectral
+fermiflow model --input-model ../data/models/target_input.xml --free-spectral-within 3 --free-norm-until 5 --ts-results ../products_1GeV/target_minuit_results.dat --ts-threshold 1 --background-norm gll_iem_v07 --background-norm iso_P8R3_SOURCE_V3_v1 --source-policy kes27=spectral
 ```
 
 如希望在拟合前临时调用同一个工具，而不改项目配置，则额外传入独立策略文件：
 
 ```bash
-fermiflow run -- --config ../configs/g328_4_100MeV.yaml --mode like --input-model ../data/models/target_input.xml --model-policy ../configs/model_policy.yaml
+fermiflow run --config ../configs/g328_4_100MeV.yaml --mode like --input-model ../data/models/target_input.xml --model-policy ../configs/model_policy.yaml
 
-fermiflow spatial -- --config ../configs/spatial_g328_4.yaml --model-policy ../configs/model_policy.yaml
+fermiflow spatial --config ../configs/spatial_g328_4.yaml --model-policy ../configs/model_policy.yaml
 ```
 
 `fermiflow run` 会在原 XML 旁生成 `*_edited.xml`；`fermiflow spatial` 会把副本写入空间拟合输出目录的 `model_inputs/`，然后再开始分析。两者都不修改总 YAML 或原 XML。
@@ -341,6 +341,72 @@ bash ../sbatch/spatial_grid/submit_spatial_grid.sh
 ```
 
 `spatial_grid_manifest.csv` 保留 tag、每个源实际使用的模型、XML、单模型 YAML、输出目录、region 文件和 sbatch 文件路径。后续比较 likelihood、TS、定位结果和延展半径时，应从该表读取组合信息，而不是依赖文件名猜测模型。
+
+### 以重新定位后的 XML 批量运行 gtlike
+
+空间组合的 raw likelihood 不应直接来自初始坐标的 XML。推荐顺序是：先完成全部 Fermipy spatial 任务，检查定位和延展结果，再将每个组合的 `spatial_fit_final.xml` 用作该组合的 gtlike 输入。
+
+在 `spatial_grid.yaml` 中增加：
+
+```yaml
+gtlike:
+  project_config: ../configs/kes27_1GeV.yaml
+  # model_policy: ../configs/modify-model.yaml
+  slurm:
+    sbatch_dir: ../sbatch/gtlike_grid
+    log_dir: ../logs/gtlike_grid
+
+comparison:
+  output: ../products_1GeV/spatial_grid/likelihood_comparison.csv
+```
+
+`project_config` 是标准 Fermitools 项目 YAML；每个组合必须使用同一份事件筛选、CCUBE、曝光图、livetime cube、IRF 和能段设置。空间任务结束并确认 region 合理后，生成 gtlike 输入和任务：
+
+```bash
+fermiflow spatial-grid --config ../configs/spatial_grid.yaml --prepare-gtlike
+```
+
+每个已经存在 `spatial_fit_final.xml` 的组合将产生：
+
+```text
+<tag>/
+├── spatial_fit_final.xml
+├── <tag>_reloc_input.xml
+├── <tag>_reloc_srcmaps.fits       # gtlike 运行后生成
+├── <tag>_reloc_drmnfb.xml         # gtlike 运行后生成
+├── <tag>_reloc_minuit.xml         # gtlike 运行后生成
+└── gtlike.log                     # 每个组合稳定、可复查的日志
+```
+
+`_reloc_input.xml` 保留 Fermipy 得到的最佳 RA、DEC 与延展尺度。若设置 `gtlike.model_policy`，工具会在复制最终 XML 后重新应用这份策略：空间参数固定，而背景与谱参数的 `free` 状态在所有组合中统一。这样避免 Fermipy 临时改变自由参数状态，破坏 gtlike likelihood 的可比性。
+
+该步骤只为已完成的 spatial 结果写入 gtlike `.sbatch`，不会自动提交：
+
+```bash
+bash ../sbatch/gtlike_grid/submit_gtlike_grid.sh
+```
+
+每个任务会针对自己的 `_reloc_input.xml` 重新生成 source maps，再依次运行 DRMNFB 和 MINUIT；不同空间模板之间不能复用同一个 `srcmaps.fits`。
+
+全部或部分 gtlike 任务完成后，运行：
+
+```bash
+fermiflow spatial-grid --config ../configs/spatial_grid.yaml --compare-likelihood
+```
+
+比较器只读取 manifest 中记录的 `<tag>/gtlike.log`，并且只纳入包含 `[DONE] gtlike (MINUIT) finished` 的任务。它输出按 \(-\log L\) 排序的表、相对最佳模型的
+
+\[
+\Delta TS=2\left[(-\log L)_i-(-\log L)_{\rm best}\right],
+\]
+
+并在固定其它所有源假设的前提下，列出每个源切换 Point/Gaussian/Disk 或“存在/不存在”时的比较。对于可选源，存在与缺失的一对模型会给出：
+
+\[
+TS_{\rm source}=2\left[(-\log L)_{\rm absent}-(-\log L)_{\rm present}\right].
+\]
+
+注意：这一步并不重新定位。若需要比较每种模型的最佳位置，必须重新运行对应的 Fermipy spatial 任务，而不是只修改 gtlike 输入 XML 的坐标。
 
 ### 可选：用同一 TS map 检查所有空间结果
 

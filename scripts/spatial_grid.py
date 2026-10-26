@@ -15,10 +15,13 @@ import itertools
 import math
 import re
 import shlex
+import shutil
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import yaml
+
+from model_editor import apply_model_policy, load_model_policy
 
 
 MODEL_TYPES = {
@@ -28,15 +31,28 @@ MODEL_TYPES = {
 }
 GAUSSIAN_R68_PER_SIGMA = math.sqrt(-2.0 * math.log(1.0 - 0.68))
 DISK_R68_PER_RADIUS = math.sqrt(0.68)
+NLL_RE = re.compile(r"-log\(Likelihood\):\s*([-+]?\d+(?:\.\d*)?(?:[eE][-+]?\d+)?)")
+GTLIKE_DONE_TEXT = "[DONE] gtlike (MINUIT) finished"
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", required=True, type=Path)
-    parser.add_argument(
+    action = parser.add_mutually_exclusive_group()
+    action.add_argument(
         "--plot",
         action="store_true",
         help="Plot completed grid regions over plot.tsmap from the grid YAML.",
+    )
+    action.add_argument(
+        "--prepare-gtlike",
+        action="store_true",
+        help="Create relocated XML models and Slurm gtlike jobs from completed spatial fits.",
+    )
+    action.add_argument(
+        "--compare-likelihood",
+        action="store_true",
+        help="Rank completed gtlike jobs using manifest-recorded stable logs.",
     )
     return parser.parse_args()
 
@@ -47,6 +63,37 @@ def resolve_path(value, base_dir):
         return None
     path = Path(value).expanduser()
     return path if path.is_absolute() else (base_dir / path).resolve()
+
+
+def load_grid_config(config_path):
+    with config_path.open(encoding="utf-8") as handle:
+        return yaml.safe_load(handle) or {}
+
+
+def output_root_from_grid(grid, base_dir):
+    output_root = resolve_path(grid.get("base", {}).get("output_root"), base_dir)
+    if output_root is None:
+        raise ValueError("base.output_root is required in spatial_grid.yaml.")
+    return output_root
+
+
+def read_manifest(path):
+    if not path.is_file():
+        raise FileNotFoundError(f"Grid manifest not found: {path}")
+    with path.open(encoding="utf-8") as handle:
+        return list(csv.DictReader(handle))
+
+
+def write_manifest(path, rows, fieldnames):
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def extend_fieldnames(rows, required_fields):
+    existing = list(rows[0]) if rows else []
+    return [*existing, *(field for field in required_fields if field not in existing)]
 
 
 def file_label(value):
@@ -280,16 +327,78 @@ def write_submit_script(path, sbatch_files):
     path.chmod(0o750)
 
 
+def resolve_slurm_config(config, base_dir, default_root, default_name):
+    """Resolve one Slurm block and create its stable output directories."""
+    config = dict(config or {})
+    config["sbatch_dir"] = resolve_path(
+        config.get("sbatch_dir", default_root / "sbatch" / default_name), base_dir
+    )
+    config["log_dir"] = resolve_path(
+        config.get("log_dir", default_root / "logs" / default_name), base_dir
+    )
+    config["working_dir"] = resolve_path(
+        config.get("working_dir", base_dir.parent / "scripts"), base_dir
+    )
+    config["conda_env"] = config.get("conda_env", "fermi")
+    config["conda_sh"] = resolve_path(
+        config.get("conda_sh", "/share/home/whjing/miniforge3/etc/profile.d/conda.sh"),
+        base_dir,
+    )
+    config["sbatch_dir"].mkdir(parents=True, exist_ok=True)
+    config["log_dir"].mkdir(parents=True, exist_ok=True)
+    return config
+
+
+def write_gtlike_sbatch(path, tag, project_config, input_model, job_log, slurm):
+    """Write one gtlike job that records a deterministic log beside its XML."""
+    nodes = slurm.get("nodes", [])
+    node = nodes[slurm["index"] % len(nodes)] if nodes else None
+    directives = [
+        f"#SBATCH --job-name=like-{tag}",
+        "#SBATCH --nodes=1",
+        "#SBATCH --ntasks=1",
+        "#SBATCH --cpus-per-task=1",
+    ]
+    if node:
+        directives.append(f"#SBATCH --nodelist={node}")
+    directives.extend(
+        [
+            f"#SBATCH --output={slurm['log_dir']}/%x-%j.log",
+            f"#SBATCH --error={slurm['log_dir']}/%x-%j.log",
+        ]
+    )
+    path.write_text(
+        "\n".join(
+            [
+                "#!/usr/bin/env bash",
+                *directives,
+                "",
+                "set -eo pipefail",
+                f"source {shlex.quote(str(slurm['conda_sh']))}",
+                f"conda activate {shlex.quote(str(slurm['conda_env']))}",
+                f"cd {shlex.quote(str(slurm['working_dir']))}",
+                f"mkdir -p {shlex.quote(str(job_log.parent))}",
+                "# tee preserves a stable per-model log; pipefail preserves failures.",
+                f"fermiflow run --config {shlex.quote(str(project_config))} --mode like "
+                f"--input-model {shlex.quote(str(input_model))} 2>&1 | "
+                f"tee {shlex.quote(str(job_log))}",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    path.chmod(0o750)
+
+
 def generate_grid(config_path):
     """Create XML, spatial YAML, Slurm scripts, and a manifest for every hypothesis."""
     base_dir = config_path.parent
-    with config_path.open(encoding="utf-8") as handle:
-        grid = yaml.safe_load(handle) or {}
+    grid = load_grid_config(config_path)
 
     base = grid.get("base", {})
     input_model = resolve_path(base.get("input_model"), base_dir)
     template_path = resolve_path(base.get("spatial_template"), base_dir)
-    output_root = resolve_path(base.get("output_root"), base_dir)
+    output_root = output_root_from_grid(grid, base_dir)
     model_policy = resolve_path(base.get("model_policy"), base_dir)
     if not input_model or not input_model.is_file():
         raise FileNotFoundError(f"Input XML not found: {input_model}")
@@ -321,17 +430,7 @@ def generate_grid(config_path):
     model_dir.mkdir(exist_ok=True)
     config_dir.mkdir(exist_ok=True)
 
-    slurm = dict(grid.get("slurm", {}))
-    slurm["sbatch_dir"] = resolve_path(slurm.get("sbatch_dir", output_root / "sbatch"), base_dir)
-    slurm["log_dir"] = resolve_path(slurm.get("log_dir", output_root / "logs"), base_dir)
-    slurm["working_dir"] = resolve_path(slurm.get("working_dir", base_dir.parent / "scripts"), base_dir)
-    slurm["conda_env"] = slurm.get("conda_env", "fermi")
-    slurm["conda_sh"] = resolve_path(
-        slurm.get("conda_sh", "/share/home/whjing/miniforge3/etc/profile.d/conda.sh"),
-        base_dir,
-    )
-    slurm["sbatch_dir"].mkdir(parents=True, exist_ok=True)
-    slurm["log_dir"].mkdir(parents=True, exist_ok=True)
+    slurm = resolve_slurm_config(grid.get("slurm"), base_dir, output_root, "spatial_grid")
 
     rows = []
     sbatch_files = []
@@ -376,6 +475,9 @@ def generate_grid(config_path):
             "input_model": str(model_path),
             "spatial_config": str(config_file),
             "output_dir": str(output_dir),
+            "spatial_final_model": str(
+                output_dir / f"{spatial_config['outputs']['model_name']}.xml"
+            ),
             "region_file": str(output_dir / region_name),
             "sbatch_file": str(sbatch_file),
             "model_policy": "" if model_policy is None else str(model_policy),
@@ -394,21 +496,225 @@ def generate_grid(config_path):
         "input_model",
         "spatial_config",
         "output_dir",
+        "spatial_final_model",
         "region_file",
         "sbatch_file",
         "model_policy",
         *(source["name"] for source in source_configs),
     ]
-    with manifest.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(rows)
+    write_manifest(manifest, rows, fieldnames)
 
     submit_script = slurm["sbatch_dir"] / "submit_spatial_grid.sh"
     write_submit_script(submit_script, sbatch_files)
     print(f"Generated {len(rows)} spatial hypotheses.")
     print(f"Manifest     : {manifest}")
     print(f"Submit script: {submit_script}")
+
+
+def prepare_gtlike(config_path):
+    """Turn completed Fermipy spatial models into fixed-space gtlike inputs."""
+    base_dir = config_path.parent
+    grid = load_grid_config(config_path)
+    output_root = output_root_from_grid(grid, base_dir)
+    manifest = output_root / "spatial_grid_manifest.csv"
+    rows = read_manifest(manifest)
+    like_config = grid.get("gtlike")
+    if not like_config:
+        raise SystemExit("No gtlike block is set in spatial_grid.yaml.")
+
+    project_config = resolve_path(like_config.get("project_config"), base_dir)
+    if project_config is None or not project_config.is_file():
+        raise FileNotFoundError(f"gtlike.project_config not found: {project_config}")
+    policy_value = like_config.get("model_policy", grid.get("base", {}).get("model_policy"))
+    model_policy = resolve_path(policy_value, base_dir)
+    if model_policy and not model_policy.is_file():
+        raise FileNotFoundError(f"gtlike model policy not found: {model_policy}")
+    policy = load_model_policy(model_policy) if model_policy else None
+
+    slurm_values = dict(grid.get("slurm") or {})
+    slurm_values.update(like_config.get("slurm") or {})
+    slurm = resolve_slurm_config(slurm_values, base_dir, output_root, "gtlike_grid")
+    sbatch_files = []
+    prepared = 0
+
+    for index, row in enumerate(rows):
+        final_model = Path(
+            row.get("spatial_final_model")
+            or Path(row["output_dir"]) / "spatial_fit_final.xml"
+        )
+        if not final_model.is_file():
+            row["gtlike_status"] = "spatial_pending"
+            continue
+
+        output_dir = Path(row["output_dir"])
+        reloc_input = output_dir / f"{row['tag']}_reloc_input.xml"
+        if policy:
+            _, original_free, final_free = apply_model_policy(
+                final_model, reloc_input, policy
+            )
+            print(f"Prepared {row['tag']}: free parameters {original_free} -> {final_free}")
+        else:
+            shutil.copy2(final_model, reloc_input)
+            print(f"Prepared {row['tag']}: copied final spatial XML without a model policy")
+
+        job_log = output_dir / "gtlike.log"
+        slurm["index"] = index
+        sbatch_file = slurm["sbatch_dir"] / f"{row['tag']}_gtlike.sbatch"
+        write_gtlike_sbatch(
+            sbatch_file,
+            row["tag"],
+            project_config,
+            reloc_input,
+            job_log,
+            slurm,
+        )
+        row.update(
+            {
+                "reloc_input_model": str(reloc_input),
+                "gtlike_log": str(job_log),
+                "gtlike_sbatch": str(sbatch_file),
+                "gtlike_status": "prepared",
+            }
+        )
+        sbatch_files.append(sbatch_file)
+        prepared += 1
+
+    fields = extend_fieldnames(
+        rows,
+        ["reloc_input_model", "gtlike_log", "gtlike_sbatch", "gtlike_status"],
+    )
+    write_manifest(manifest, rows, fields)
+    submit_script = slurm["sbatch_dir"] / "submit_gtlike_grid.sh"
+    write_submit_script(submit_script, sbatch_files)
+    print(f"Prepared {prepared} gtlike jobs from completed spatial fits.")
+    print(f"Updated manifest: {manifest}")
+    print(f"Submit script   : {submit_script}")
+
+
+def read_gtlike_result(row):
+    """Read only the final MINUIT likelihood from the stable manifest log."""
+    log_path = Path(row.get("gtlike_log", ""))
+    if not log_path.is_file():
+        return {"status": "log_missing", "complete": False, "nll": None}
+    text = log_path.read_text(encoding="utf-8", errors="replace")
+    values = [float(value) for value in NLL_RE.findall(text)]
+    complete = GTLIKE_DONE_TEXT in text
+    if not values:
+        return {"status": "likelihood_missing", "complete": complete, "nll": None}
+    return {
+        "status": "complete" if complete else "incomplete",
+        "complete": complete,
+        "nll": values[-1],
+    }
+
+
+def print_source_comparisons(rows, source_names):
+    """Compare one source while holding every configured companion fixed."""
+    for source_name in source_names:
+        groups = {}
+        for row in rows:
+            companions = tuple(
+                (name, row.get(name, "")) for name in source_names if name != source_name
+            )
+            groups.setdefault(companions, []).append(row)
+
+        printed = False
+        for companions, group in sorted(groups.items()):
+            variants = {item.get(source_name, "") for item in group}
+            if len(variants) < 2:
+                continue
+            if not printed:
+                print(f"\n{source_name} comparisons")
+                print("-" * (len(source_name) + 12))
+                printed = True
+            best = min(group, key=lambda item: item["nll"])
+            details = "; ".join(
+                f"{item.get(source_name)}: ΔTS={2 * (item['nll'] - best['nll']):.2f}"
+                for item in sorted(group, key=lambda item: item["nll"])
+            )
+            companions_text = ", ".join(f"{name}={value}" for name, value in companions)
+            print(f"{companions_text}: best={best.get(source_name)}; {details}")
+
+
+def print_optional_source_tests(rows, source_names):
+    """Print TS for optional-source presence tests whenever an absent pair exists."""
+    for source_name in source_names:
+        groups = {}
+        for row in rows:
+            companions = tuple(
+                (name, row.get(name, "")) for name in source_names if name != source_name
+            )
+            groups.setdefault(companions, []).append(row)
+
+        for companions, group in sorted(groups.items()):
+            absent = next((item for item in group if item.get(source_name) == "absent"), None)
+            if absent is None:
+                continue
+            for present in (item for item in group if item.get(source_name) != "absent"):
+                ts = 2.0 * (absent["nll"] - present["nll"])
+                companions_text = ", ".join(f"{name}={value}" for name, value in companions)
+                print(
+                    f"TS_{file_label(source_name)} ({present.get(source_name)}; "
+                    f"{companions_text}) = {ts:.2f}"
+                )
+
+
+def compare_likelihood(config_path):
+    """Rank completed gtlike combinations using manifest metadata, not filename rules."""
+    base_dir = config_path.parent
+    grid = load_grid_config(config_path)
+    output_root = output_root_from_grid(grid, base_dir)
+    manifest = output_root / "spatial_grid_manifest.csv"
+    rows = read_manifest(manifest)
+    source_names = [item["name"] for item in grid.get("sources", [])]
+
+    completed = []
+    for row in rows:
+        row.update(read_gtlike_result(row))
+        if row["complete"] and row["nll"] is not None:
+            completed.append(row)
+
+    print(f"Configured combinations : {len(rows)}")
+    print(f"Completed gtlike models : {len(completed)}")
+    if not completed:
+        print("No completed gtlike logs are available yet.")
+        return
+
+    best = min(row["nll"] for row in completed)
+    ordered = sorted(completed, key=lambda item: item["nll"])
+    print("\nAll completed models")
+    print("--------------------")
+    print(f"{'rank':>4}  {'model':<58}  {'-logL':>15}  {'ΔTS from best':>14}")
+    for rank, row in enumerate(ordered, start=1):
+        row["rank"] = rank
+        row["delta_ts_from_best"] = 2.0 * (row["nll"] - best)
+        print(
+            f"{rank:4d}  {row['tag']:<58}  {row['nll']:15.2f}  "
+            f"{row['delta_ts_from_best']:14.2f}"
+        )
+
+    print_source_comparisons(ordered, source_names)
+    print("\nOptional-source contribution tests")
+    print("----------------------------------")
+    print_optional_source_tests(ordered, source_names)
+
+    comparison = grid.get("comparison", {})
+    output = resolve_path(
+        comparison.get("output", output_root / "likelihood_comparison.csv"), base_dir
+    )
+    output.parent.mkdir(parents=True, exist_ok=True)
+    fields = [
+        "rank",
+        "tag",
+        "nll",
+        "delta_ts_from_best",
+        "complete",
+        "status",
+        "gtlike_log",
+        *source_names,
+    ]
+    write_manifest(output, ordered, fields)
+    print(f"\nSaved likelihood comparison: {output}")
 
 
 def read_ds9_contours(contour_file):
@@ -534,6 +840,10 @@ def main():
     config_path = args.config.expanduser().resolve()
     if args.plot:
         plot_grid(config_path)
+    elif args.prepare_gtlike:
+        prepare_gtlike(config_path)
+    elif args.compare_likelihood:
+        compare_likelihood(config_path)
     else:
         generate_grid(config_path)
 

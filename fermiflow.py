@@ -215,6 +215,19 @@ slurm:
   sbatch_dir: ../sbatch/spatial_grid
   log_dir: ../logs/spatial_grid
 
+# Run this stage only after inspecting the completed spatial regions.  It
+# copies each spatial_fit_final.xml to <tag>_reloc_input.xml, reapplies the
+# same free-parameter policy, then writes one gtlike job per completed model.
+gtlike:
+  project_config: ../configs/{target}_{energy_label}.yaml
+  # model_policy: ../configs/modify-model.yaml
+  slurm:
+    sbatch_dir: ../sbatch/gtlike_grid
+    log_dir: ../logs/gtlike_grid
+
+comparison:
+  output: ../products_{energy_label}/spatial_grid/likelihood_comparison.csv
+
 # Optional visual check after jobs finish.  Leave this entire block commented
 # if no common TS map is available; grid generation is unaffected.
 # plot:
