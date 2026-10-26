@@ -464,7 +464,9 @@ def generate_grid(config_path):
         # unambiguous even outside their individual output directories.
         region_name = f"{tag}.reg"
         spatial_config["outputs"]["region_file"] = region_name
-        spatial_config["outputs"].setdefault("model_name", "spatial_fit_final")
+        # The final XML is also tag-specific so it remains identifiable after
+        # copying it outside this hypothesis directory.
+        spatial_config["outputs"]["model_name"] = f"{tag}_spatial_final"
 
         config_file = config_dir / f"spatial_{tag}.yaml"
         with config_file.open("w", encoding="utf-8") as handle:
@@ -545,7 +547,7 @@ def prepare_gtlike(config_path):
     for index, row in enumerate(rows):
         final_model = Path(
             row.get("spatial_final_model")
-            or Path(row["output_dir"]) / "spatial_fit_final.xml"
+            or Path(row["output_dir"]) / f"{row['tag']}_spatial_final.xml"
         )
         if not final_model.is_file():
             row["gtlike_status"] = "spatial_pending"

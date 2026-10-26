@@ -354,11 +354,11 @@ sources:
     extension: {}
 ```
 
-这表示对 `g328` 执行点源定位（`localize`），对 `extend` 执行 Gaussian 延展拟合（`extension`）；空字典表示继承空间模板 YAML 顶层 `localize:`、`extension:` 中的默认设置。每个组合的最终 XML 仍统一命名为 `spatial_fit_final.xml`，但 DS9 region 使用完整 tag，例如 `g328-point-extend-gaussian.reg`，便于将 region 文件移出原目录后仍能辨认其模型组合。
+这表示对 `g328` 执行点源定位（`localize`），对 `extend` 执行 Gaussian 延展拟合（`extension`）；空字典表示继承空间模板 YAML 顶层 `localize:`、`extension:` 中的默认设置。组合生成器会以完整 tag 命名最终 XML 与 DS9 region，例如 `g328-point-extend-gaussian_spatial_final.xml` 和 `g328-point-extend-gaussian.reg`，便于将文件移出原目录后仍能辨认其模型组合。
 
 ### 以重新定位后的 XML 批量运行 gtlike
 
-空间组合的 raw likelihood 不应直接来自初始坐标的 XML。推荐顺序是：先完成全部 Fermipy spatial 任务，检查定位和延展结果，再将每个组合的 `spatial_fit_final.xml` 用作该组合的 gtlike 输入。
+空间组合的 raw likelihood 不应直接来自初始坐标的 XML。推荐顺序是：先完成全部 Fermipy spatial 任务，检查定位和延展结果，再将每个组合的 `<tag>_spatial_final.xml` 用作该组合的 gtlike 输入。
 
 在 `spatial_grid.yaml` 中增加：
 
@@ -380,11 +380,11 @@ comparison:
 fermiflow spatial-grid --config ../configs/spatial_grid.yaml --prepare-gtlike
 ```
 
-每个已经存在 `spatial_fit_final.xml` 的组合将产生：
+每个已经存在 `<tag>_spatial_final.xml` 的组合将产生：
 
 ```text
 <tag>/
-├── spatial_fit_final.xml
+├── <tag>_spatial_final.xml
 ├── <tag>_reloc_input.xml
 ├── <tag>_reloc_srcmaps.fits       # gtlike 运行后生成
 ├── <tag>_reloc_drmnfb.xml         # gtlike 运行后生成

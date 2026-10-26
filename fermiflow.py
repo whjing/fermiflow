@@ -216,7 +216,7 @@ slurm:
   log_dir: ../logs/spatial_grid
 
 # Run this stage only after inspecting the completed spatial regions.  It
-# copies each spatial_fit_final.xml to <tag>_reloc_input.xml, reapplies the
+# copies each <tag>_spatial_final.xml to <tag>_reloc_input.xml, reapplies the
 # same free-parameter policy, then writes one gtlike job per completed model.
 gtlike:
   project_config: ../configs/{target}_{energy_label}.yaml
