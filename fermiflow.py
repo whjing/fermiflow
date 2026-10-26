@@ -310,7 +310,7 @@ def main() -> None:
         return
 
     script_name = {
-        "run": "run_kes27.py",
+        "run": "run_fermitools.py",
         "spatial": "run_spatial.py",
         "spatial-grid": "spatial_grid.py",
         "download": "download.sh",

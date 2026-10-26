@@ -13,7 +13,7 @@ fermiflow/
 │   └── kes27_100MeV.yaml         # 当前 Kes 27 配置示例
 │   └── model_policy_radial.yaml  # 独立的 XML 自由参数策略示例
 └── scripts/
-    ├── run_kes27.py              # Fermitools 主流程
+    ├── run_fermitools.py          # Fermitools 主流程
     ├── fermi_target.py           # Fermitools 各个处理步骤
     ├── run_spatial.py            # Fermipy 定位与延展拟合
     ├── spatial_grid.py           # 批量空间假设、Slurm 脚本与可选图像检查

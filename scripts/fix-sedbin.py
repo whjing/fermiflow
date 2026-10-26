@@ -54,11 +54,11 @@ def write_submit_script(model_files):
     The generated shell script does not submit anything until you run it.
     """
     script_dir = Path.cwd().resolve()
-    run_script = (script_dir / "run_kes27.py").resolve()
+    run_script = (script_dir / "run_fermitools.py").resolve()
     config_file = (script_dir / "kes27_100MeV.yaml").resolve()
 
     if not run_script.is_file():
-        raise FileNotFoundError(f"run_kes27.py not found: {run_script}")
+        raise FileNotFoundError(f"run_fermitools.py not found: {run_script}")
 
     if not config_file.is_file():
         raise FileNotFoundError(f"YAML config not found: {config_file}")

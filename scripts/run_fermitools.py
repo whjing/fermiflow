@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Run the Kes 27 Fermitools workflow from a YAML project configuration."""
+"""Run the configured Fermitools workflow from a YAML project configuration."""
 
 import argparse
 import logging
-import os
 import os
 import shlex
 import shutil
