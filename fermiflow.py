@@ -220,6 +220,9 @@ slurm:
 # same free-parameter policy, then writes one gtlike job per completed model.
 gtlike:
   project_config: ../configs/{target}_{energy_label}.yaml
+  # Optional; defaults to base.input_model.  This fixed template supplies all
+  # spectra and backgrounds; only fitted spatial parameters are inserted.
+  # template_model: ../products_{energy_label}/{analysis_name}_model.xml
   # model_policy: ../configs/modify-model.yaml
   slurm:
     sbatch_dir: ../sbatch/gtlike_grid

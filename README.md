@@ -365,6 +365,8 @@ sources:
 ```yaml
 gtlike:
   project_config: ../configs/kes27_1GeV.yaml
+  # Optional; defaults to base.input_model.
+  template_model: ../products_1GeV/kes27_1GeV_model-kes27.xml
   # model_policy: ../configs/modify-model.yaml
   slurm:
     sbatch_dir: ../sbatch/gtlike_grid
@@ -394,7 +396,7 @@ fermiflow spatial-grid --config ../configs/spatial_grid.yaml --prepare-gtlike
 
 Fermipy 本身常把 `write_roi()` 的 XML 临时写为 `<tag>_spatial_final_00.xml`；流水线会在空间拟合成功后自动规范化为 `<tag>_spatial_final.xml`。对于已在旧版本流水线完成的任务，`--prepare-gtlike` 也会自动识别最新的 `_00.xml` 文件并记录其实际路径。
 
-`_reloc_input.xml` 保留 Fermipy 得到的最佳 RA、DEC 与延展尺度。若设置 `gtlike.model_policy`，工具会在复制最终 XML 后重新应用这份策略：空间参数固定，而背景与谱参数的 `free` 状态在所有组合中统一。这样避免 Fermipy 临时改变自由参数状态，破坏 gtlike likelihood 的可比性。
+`_reloc_input.xml` 始终从 `gtlike.template_model`（未设置时为 `base.input_model`）复制：它保留模板内所有谱参数、背景源、其它邻源及其 `free` 状态。脚本只从对应的 `<tag>_spatial_final.xml` 读取候选源的最佳空间模型、RA、DEC 与延展尺度，并按组合删除缺失源。若设置 `gtlike.model_policy`，会在此基础上额外统一修改自由参数策略；若要让其它内容严格保持模板一致，请不要设置该项。
 
 该步骤只为已完成的 spatial 结果写入 gtlike `.sbatch`，不会自动提交：
 

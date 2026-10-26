@@ -15,7 +15,6 @@ import itertools
 import math
 import re
 import shlex
-import shutil
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -327,6 +326,56 @@ def write_submit_script(path, sbatch_files):
     path.chmod(0o750)
 
 
+def build_relocated_input(template_model, spatial_model, output_model, row, source_names):
+    """Copy one fixed template, changing only grid-source spatial information.
+
+    The Fermipy XML supplies the fitted spatial model and parameters.  Every
+    spectrum, diffuse component, unrelated source, and original free state
+    comes from ``template_model``.  Sources marked absent in the grid row are
+    removed from the copied template.
+    """
+    template_tree = ET.parse(template_model)
+    template_root = template_tree.getroot()
+    fitted_root = ET.parse(spatial_model).getroot()
+    template_sources = {
+        source.get("name"): source for source in template_root.findall("source")
+    }
+    fitted_sources = {
+        source.get("name"): source for source in fitted_root.findall("source")
+    }
+
+    for source_name in source_names:
+        template_source = template_sources.get(source_name)
+        if template_source is None:
+            raise ValueError(f"Source missing from gtlike template XML: {source_name}")
+
+        if row.get(source_name) == "absent":
+            template_root.remove(template_source)
+            continue
+
+        fitted_source = fitted_sources.get(source_name)
+        fitted_spatial = (
+            fitted_source.find("spatialModel") if fitted_source is not None else None
+        )
+        if fitted_spatial is None:
+            raise ValueError(
+                f"Source '{source_name}' has no fitted spatial model in {spatial_model}"
+            )
+
+        old_spatial = template_source.find("spatialModel")
+        if old_spatial is not None:
+            template_source.remove(old_spatial)
+        new_spatial = copy.deepcopy(fitted_spatial)
+        for parameter in new_spatial.findall("parameter"):
+            parameter.set("free", "0")
+        template_source.append(new_spatial)
+        template_source.set("type", fitted_source.get("type", template_source.get("type")))
+
+    output_model.parent.mkdir(parents=True, exist_ok=True)
+    ET.indent(template_tree, space="  ")
+    template_tree.write(output_model, encoding="UTF-8", xml_declaration=True)
+
+
 def resolve_slurm_config(config, base_dir, default_root, default_name):
     """Resolve one Slurm block and create its stable output directories."""
     config = dict(config or {})
@@ -532,6 +581,12 @@ def prepare_gtlike(config_path):
     project_config = resolve_path(like_config.get("project_config"), base_dir)
     if project_config is None or not project_config.is_file():
         raise FileNotFoundError(f"gtlike.project_config not found: {project_config}")
+    template_model = resolve_path(
+        like_config.get("template_model", grid.get("base", {}).get("input_model")),
+        base_dir,
+    )
+    if template_model is None or not template_model.is_file():
+        raise FileNotFoundError(f"gtlike.template_model not found: {template_model}")
     policy_value = like_config.get("model_policy", grid.get("base", {}).get("model_policy"))
     model_policy = resolve_path(policy_value, base_dir)
     if model_policy and not model_policy.is_file():
@@ -565,14 +620,20 @@ def prepare_gtlike(config_path):
 
         output_dir = Path(row["output_dir"])
         reloc_input = output_dir / f"{row['tag']}_reloc_input.xml"
+        build_relocated_input(
+            template_model,
+            final_model,
+            reloc_input,
+            row,
+            source_names=[item["name"] for item in grid.get("sources", [])],
+        )
         if policy:
             _, original_free, final_free = apply_model_policy(
-                final_model, reloc_input, policy
+                reloc_input, reloc_input, policy
             )
             print(f"Prepared {row['tag']}: free parameters {original_free} -> {final_free}")
         else:
-            shutil.copy2(final_model, reloc_input)
-            print(f"Prepared {row['tag']}: copied final spatial XML without a model policy")
+            print(f"Prepared {row['tag']}: copied template spectrum/background with fitted spatial parameters")
 
         job_log = output_dir / "gtlike.log"
         slurm["index"] = index
