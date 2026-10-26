@@ -55,10 +55,10 @@ paths:
   common_data_dir: ~/data/fermi
 
   # Reusable inputs for this project only.
-  project_data_dir: ./data
-  rawdata_dir: ./rawdata
-  products_dir: ./products_{energy_label}
-  log_dir: ./logs
+  project_data_dir: ../data
+  rawdata_dir: ../rawdata
+  products_dir: ../products_{energy_label}
+  log_dir: ../logs
 
 files:
   # Created here by prepare if it does not already exist.

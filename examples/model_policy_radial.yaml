@@ -1,6 +1,6 @@
 # Standalone XML free-parameter policy.  This file is not part of project.yaml.
-# Use with: fermiflow model -- --input-model MODEL.xml --policy model_policy_radial.yaml
-# Or:       fermiflow run -- --config project.yaml --mode like --input-model MODEL.xml --model-policy model_policy_radial.yaml
+# Use with: fermiflow model --input-model MODEL.xml --policy model_policy_radial.yaml
+# Or:       fermiflow run --config project.yaml --mode like --input-model MODEL.xml --model-policy model_policy_radial.yaml
 
 radial:
   # With no center here, the XML attribute ROI_Center_Distance is used.

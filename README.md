@@ -61,7 +61,7 @@ fermiflow path
 fermiflow init ../configs/g328_4_100MeV.yaml
 ```
 
-此命令会生成一份不会覆盖已有文件的样本配置。编辑其中的 `target`、`ra`、`dec`、能量范围、数据路径和产品目录。现有 Kes 27 参数可参照：
+此命令会生成一份不会覆盖已有文件的样本配置。默认约定是在项目的 `scripts/` 目录运行所有命令，因此项目级路径会使用 `../data`、`../rawdata`、`../products_*` 与 `../logs`。编辑其中的 `target`、`ra`、`dec`、能量范围、数据路径和产品目录。现有 Kes 27 参数可参照：
 
 ```text
 examples/kes27_100MeV.yaml
@@ -82,13 +82,13 @@ analysis:
 
 paths:
   common_data_dir: ~/data/fermi
-  project_data_dir: ./data
-  rawdata_dir: ./rawdata
-  products_dir: ./products_{energy_label}
-  log_dir: ./logs
+  project_data_dir: ../data
+  rawdata_dir: ../rawdata
+  products_dir: ../products_{energy_label}
+  log_dir: ../logs
 ```
 
-相对路径相对于运行命令时的当前目录。因此建议在分析项目目录中运行命令，配置内使用稳定的相对路径或绝对路径。
+相对路径相对于运行命令时的当前目录。本文后续命令都假定当前目录是 `<project>/scripts/`；这正好匹配你目前的 G328 项目结构。
 
 对于首次 SED 分能段拟合，`files:` 还必须设置：
 
@@ -109,7 +109,8 @@ my_project/
 │   └── regions/              # DS9 region 文件
 ├── rawdata/                  # 下载的 photon / spacecraft FITS
 ├── products_100MeV/          # 可再生的 Fermitools 产物
-└── logs/
+├── logs/
+└── scripts/                   # 在此目录运行 fermiflow 命令
 ```
 
 全局目录 `~/data/fermi/` 只放可跨项目共享的文件，例如 `gll_psc_16yr_v38.xml`、`gll_iem_v07.fits`、`iso_P8R3_SOURCE_V3_v1.txt` 和其他公共空间模板。`data/` 则保存只对当前项目有意义、但不想反复生成的输入。配置 `ltcube: "{project_data_dir}/{target}_ltcube.fits"` 后，`prepare` 会直接在 `data/` 下创建或复用该文件。
@@ -119,13 +120,7 @@ my_project/
 通过已安装命令运行：
 
 ```bash
-fermiflow run -- --config configs/g328_4_100MeV.yaml --mode MODE
-```
-
-或直接运行：
-
-```bash
-python scripts/run_kes27.py --config configs/g328_4_100MeV.yaml --mode MODE
+fermiflow run --config ../configs/g328_4_100MeV.yaml --mode MODE
 ```
 
 | 模式 | 功能 | `--input-model` |
@@ -139,8 +134,8 @@ python scripts/run_kes27.py --config configs/g328_4_100MeV.yaml --mode MODE
 ### 建立全能段数据产品
 
 ```bash
-fermiflow run -- \
-  --config configs/g328_4_100MeV.yaml \
+fermiflow run \
+  --config ../configs/g328_4_100MeV.yaml \
   --mode prepare
 ```
 
@@ -149,8 +144,8 @@ fermiflow run -- \
 ### 使用指定模型拟合全能段
 
 ```bash
-fermiflow run -- \
-  --config configs/g328_4_100MeV.yaml \
+fermiflow run \
+  --config ../configs/g328_4_100MeV.yaml \
   --mode like \
   --input-model ../products_100MeV/model_input.xml
 ```
@@ -160,8 +155,8 @@ fermiflow run -- \
 ### 生成 TS map
 
 ```bash
-fermiflow run -- \
-  --config configs/g328_4_100MeV.yaml \
+fermiflow run \
+  --config ../configs/g328_4_100MeV.yaml \
   --mode tsmap \
   --input-model ../products_100MeV/model_minuit.xml \
   --size 5 \
@@ -173,8 +168,8 @@ fermiflow run -- \
 ### 首次分能段 SED 拟合
 
 ```bash
-fermiflow run -- \
-  --config configs/g328_4_100MeV.yaml \
+fermiflow run \
+  --config ../configs/g328_4_100MeV.yaml \
   --mode bin \
   --nbins 6 \
   --ibin 1
@@ -185,8 +180,8 @@ fermiflow run -- \
 ### 用改过的模型重跑已有 SED bin
 
 ```bash
-fermiflow run -- \
-  --config configs/g328_4_100MeV.yaml \
+fermiflow run \
+  --config ../configs/g328_4_100MeV.yaml \
   --mode bin-fit \
   --nbins 6 \
   --ibin 6 \
@@ -203,7 +198,7 @@ fermiflow run -- \
 - `norm`：只放开谱归一化参数，其余谱参数与空间参数固定；
 - `fixed`：该源所有参数固定。
 
-例如，把下面内容单独保存为 `configs/model_policy.yaml`。它不属于项目总 YAML。该例会将目标中心 3° 以内的源全部放开，3°--5° 的源只放开归一化，5° 外固定，同时使 Galactic 与 isotropic 背景只放开归一化：
+例如，把下面内容单独保存为 `../configs/model_policy.yaml`。它不属于项目总 YAML。该例会将目标中心 3° 以内的源全部放开，3°--5° 的源只放开归一化，5° 外固定，同时使 Galactic 与 isotropic 背景只放开归一化：
 
 ```yaml
 radial:
@@ -244,16 +239,16 @@ ts_filter:
 
 ```bash
 fermiflow model -- \
-  --input-model data/models/target_input.xml \
-  --policy model_policy.yaml \
-  --output-model data/models/target_freeing_input.xml
+  --input-model ../data/models/target_input.xml \
+  --policy ../configs/model_policy.yaml \
+  --output-model ../data/models/target_freeing_input.xml
 ```
 
 若不写 `--output-model`，会自动创建同目录的 `target_input_edited.xml`。也可以完全不另建 YAML，直接在终端设定同一规则：
 
 ```bash
 fermiflow model -- \
-  --input-model data/models/target_input.xml \
+  --input-model ../data/models/target_input.xml \
   --free-spectral-within 3 --free-norm-until 5 \
   --ts-results ../products_1GeV/target_minuit_results.dat --ts-threshold 1 \
   --background-norm gll_iem_v07 \
@@ -265,13 +260,13 @@ fermiflow model -- \
 
 ```bash
 fermiflow run -- \
-  --config configs/g328_4_100MeV.yaml --mode like \
-  --input-model data/models/target_input.xml \
-  --model-policy configs/model_policy.yaml
+  --config ../configs/g328_4_100MeV.yaml --mode like \
+  --input-model ../data/models/target_input.xml \
+  --model-policy ../configs/model_policy.yaml
 
 fermiflow spatial -- \
-  --config configs/spatial_g328_4.yaml \
-  --model-policy configs/model_policy.yaml
+  --config ../configs/spatial_g328_4.yaml \
+  --model-policy ../configs/model_policy.yaml
 ```
 
 `fermiflow run` 会在原 XML 旁生成 `*_edited.xml`；`fermiflow spatial` 会把副本写入空间拟合输出目录的 `model_inputs/`，然后再开始分析。两者都不修改总 YAML 或原 XML。
@@ -279,7 +274,7 @@ fermiflow spatial -- \
 ## Fermipy 空间分析
 
 ```bash
-fermiflow spatial -- --config configs/spatial_g328_4.yaml
+fermiflow spatial --config ../configs/spatial_g328_4.yaml
 ```
 
 空间配置独立于 Fermitools 配置，使用 Fermipy 的 `fermipy:` 块以及顶层 `output:`、`outputs:` 和 `sources:`。例如：
@@ -316,13 +311,13 @@ https://.../SC00.fits
 然后设置下载目录和并行任务数：
 
 ```bash
-fermiflow download urls.txt rawdata 6
+fermiflow download ../urls.txt ../rawdata 6
 ```
 
 等价于：
 
 ```bash
-bash scripts/download.sh urls.txt rawdata 6
+bash download.sh ../urls.txt ../rawdata 6
 ```
 
 这里的 `6` 是同时运行的 wget 数。脚本使用 `wget --continue`，中断后用同一命令可继续下载未完成文件。

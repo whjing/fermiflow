@@ -18,10 +18,10 @@ paths:
   common_data_dir: ~/data/fermi
 
   # Belongs to this project only: reusable ltcube, input XMLs, regions, etc.
-  project_data_dir: ./data
-  rawdata_dir: ./rawdata
-  products_dir: ./products_{energy_label}
-  log_dir: ./logs
+  project_data_dir: ../data
+  rawdata_dir: ../rawdata
+  products_dir: ../products_{energy_label}
+  log_dir: ../logs
 
 files:
   ltcube: "{project_data_dir}/{target}_ltcube.fits"
