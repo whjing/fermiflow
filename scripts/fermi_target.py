@@ -605,11 +605,19 @@ class FermiTarget:
             srcmaps=generated_srcmaps,
         )
 
-        self.print_fit_summary(
-            model_file=fitted_minuit,
-            srcmaps=generated_srcmaps,
-            source_name=source_name,
-        )
+        root = ET.parse(fitted_minuit).getroot()
+        final_sources = {source.get("name") for source in root.findall("source")}
+        if source_name in final_sources:
+            self.print_fit_summary(
+                model_file=fitted_minuit,
+                srcmaps=generated_srcmaps,
+                source_name=source_name,
+            )
+        else:
+            logger.warning(
+                "Fit summary skipped: source '%s' is not in the final model.",
+                source_name,
+            )
 
         logger.info("Model fitting workflow completed.")
         logger.info(f"Source maps : {generated_srcmaps}")
