@@ -74,11 +74,11 @@ def source_distance_deg(source, radial):
 def set_source_policy(source, policy):
     """Set one source's spectral freedom and return the number of changes.
 
-    ``all`` means all fitted spectral parameters except the pivot/scale energy;
+    ``spectral`` means all fitted spectral parameters except the pivot/scale energy;
     spatial parameters remain fixed in every policy.
     """
     policy = policy.lower()
-    if policy not in {"all", "norm", "fixed"}:
+    if policy not in {"spectral", "norm", "fixed"}:
         raise ValueError(f"Unknown parameter policy: {policy}")
 
     changed = 0
@@ -97,7 +97,7 @@ def set_source_policy(source, policy):
         new_value = "0"
         if parameter in (spectrum.findall("parameter") if spectrum is not None else []):
             name = parameter.get("name", "").lower()
-            if policy == "all" and name not in FIXED_SPECTRAL_NAMES:
+            if policy == "spectral" and name not in FIXED_SPECTRAL_NAMES:
                 new_value = "1"
             elif policy == "norm" and parameter is norm_parameter:
                 new_value = "1"
@@ -218,15 +218,15 @@ def direct_policy(args):
         try:
             name, source_policy = item.rsplit("=", 1)
         except ValueError as error:
-            raise SystemExit("--source-policy must have the form NAME=all|norm|fixed") from error
+            raise SystemExit("--source-policy must have the form NAME=spectral|norm|fixed") from error
         source_rules[name] = source_policy
     if source_rules:
         policy["sources"] = source_rules
 
-    if args.free_all_within is not None or args.free_norm_until is not None:
+    if args.free_spectral_within is not None or args.free_norm_until is not None:
         zones = []
-        if args.free_all_within is not None:
-            zones.append({"max_radius": args.free_all_within, "policy": "all"})
+        if args.free_spectral_within is not None:
+            zones.append({"max_radius": args.free_spectral_within, "policy": "spectral"})
         if args.free_norm_until is not None:
             zones.append({"max_radius": args.free_norm_until, "policy": "norm"})
         policy["radial"] = {
@@ -250,15 +250,18 @@ def parse_args():
     parser.add_argument("--output-model", type=Path)
     parser.add_argument("--center-ra", type=float, help="Optional non-ROI radial center RA in degrees.")
     parser.add_argument("--center-dec", type=float, help="Optional non-ROI radial center Dec in degrees.")
-    parser.add_argument("--free-all-within", type=float, help="Free all parameters inside this radius (deg).")
+    parser.add_argument(
+        "--free-spectral-within", type=float,
+        help="Free normalization and spectral-shape parameters inside this radius (deg).",
+    )
     parser.add_argument("--free-norm-until", type=float, help="Free only normalization from the inner radius to this radius (deg).")
-    parser.add_argument("--outside-policy", choices=("all", "norm", "fixed"), default="fixed")
-    parser.add_argument("--default-policy", choices=("all", "norm", "fixed"), default="fixed")
+    parser.add_argument("--outside-policy", choices=("spectral", "norm", "fixed"), default="fixed")
+    parser.add_argument("--default-policy", choices=("spectral", "norm", "fixed"), default="fixed")
     parser.add_argument("--source-policy", action="append", default=[], metavar="NAME=POLICY")
     parser.add_argument("--background-norm", action="append", default=[], metavar="NAME")
     parser.add_argument("--ts-log", type=Path, help="Fit log containing per-source TS value lines.")
     parser.add_argument("--ts-threshold", type=float, default=1.0)
-    parser.add_argument("--ts-policy", choices=("all", "norm", "fixed"), default="fixed")
+    parser.add_argument("--ts-policy", choices=("spectral", "norm", "fixed"), default="fixed")
     return parser.parse_args()
 
 

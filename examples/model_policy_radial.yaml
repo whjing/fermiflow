@@ -6,7 +6,7 @@ radial:
   # With no center here, the XML attribute ROI_Center_Distance is used.
   # Add center: {ra: ..., dec: ...} only to use a different center.
   zones:
-    - {max_radius: 3.0, policy: all}
+    - {max_radius: 3.0, policy: spectral}
     - {max_radius: 5.0, policy: norm}
   outside_policy: fixed
 
@@ -14,7 +14,7 @@ background_norms: [gll_iem_v07, iso_P8R3_SOURCE_V3_v1]
 
 # Explicit names override radial rules.
 # sources:
-#   kes27: all
+#   kes27: spectral
 
 # Optional: sources with TS below this threshold are fixed before the radial
 # rule is applied.  The log path is relative to this policy YAML file.

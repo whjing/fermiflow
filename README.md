@@ -199,7 +199,7 @@ fermiflow run -- \
 
 `scripts/model_editor.py` 不依赖 Fermitools 或 Fermipy；它只读取一个 XML、按策略写出一个新的 XML。原输入模型保持不变。它支持三种策略：
 
-- `all`：放开归一化和谱形参数，如 `Prefactor`/`norm`、`Index`、`alpha`、`beta`；`Eb`、`Scale` 和全部空间参数固定；
+- `spectral`：放开归一化和谱形参数，如 `Prefactor`/`norm`、`Index`、`alpha`、`beta`；`Eb`、`Scale` 和全部空间参数固定；
 - `norm`：只放开谱归一化参数，其余谱参数与空间参数固定；
 - `fixed`：该源所有参数固定。
 
@@ -210,12 +210,12 @@ radial:
   # Uses each source's ROI_Center_Distance attribute (deg).
   # Add center: {ra: ..., dec: ...} only for a different center.
   zones:
-    - {max_radius: 3.0, policy: all}
+    - {max_radius: 3.0, policy: spectral}
     - {max_radius: 5.0, policy: norm}
   outside_policy: fixed
 background_norms: [gll_iem_v07, iso_P8R3_SOURCE_V3_v1]
 sources:
-  kes27: all
+  kes27: spectral
 ```
 
 指定源的 `sources:` 规则优先级最高，因而可用于强制放开目标源或指定邻源；例如 `nearby_source: norm`。没有位置的背景源不会套用半径分区，只会由 `background_norms` 或 `sources` 控制。
@@ -225,7 +225,7 @@ sources:
 ```yaml
 default_policy: fixed
 sources:
-  kes27: all
+  kes27: spectral
 background_norms: [gll_iem_v07, iso_P8R3_SOURCE_V3_v1]
 ```
 
@@ -254,11 +254,11 @@ fermiflow model -- \
 ```bash
 fermiflow model -- \
   --input-model data/models/target_input.xml \
-  --free-all-within 3 --free-norm-until 5 \
+  --free-spectral-within 3 --free-norm-until 5 \
   --ts-log ../logs/gtlike/gtlike-final.out --ts-threshold 1 \
   --background-norm gll_iem_v07 \
   --background-norm iso_P8R3_SOURCE_V3_v1 \
-  --source-policy kes27=all
+  --source-policy kes27=spectral
 ```
 
 如希望在拟合前临时调用同一个工具，而不改项目配置，则额外传入独立策略文件：
