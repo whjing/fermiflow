@@ -804,14 +804,17 @@ def plot_grid(config_path):
     nrows = math.ceil(len(rows) / ncols)
     figure = plt.figure(figsize=(4.5 * ncols, 3.8 * nrows))
     vmax = np.nanpercentile(data, percentile)
+    axes = []
+    image = None
     for index, row in enumerate(rows, start=1):
         axis = figure.add_subplot(nrows, ncols, index, projection=wcs)
-        axis.imshow(
+        image = axis.imshow(
             data,
             origin="lower",
             cmap=plot_config.get("cmap", "inferno"),
             norm=PowerNorm(gamma=gamma, vmin=vmin, vmax=vmax),
         )
+        axes.append(axis)
         for contour in contours:
             if len(contour) >= 2:
                 ra, dec = zip(*contour)
@@ -841,7 +844,9 @@ def plot_grid(config_path):
         axis.coords[0].set_ticklabel(size=7)
         axis.coords[1].set_ticklabel(size=7)
 
-    figure.tight_layout()
+    figure.tight_layout(rect=(0.0, 0.0, 0.92, 1.0))
+    colorbar = figure.colorbar(image, ax=axes, shrink=0.84, pad=0.02)
+    colorbar.set_label(plot_config.get("colorbar_label", "TS"))
     output_png.parent.mkdir(parents=True, exist_ok=True)
     figure.savefig(output_png, dpi=200, bbox_inches="tight")
     plt.close(figure)
