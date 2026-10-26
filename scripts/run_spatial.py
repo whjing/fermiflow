@@ -48,6 +48,14 @@ def localization_r68(localization_result):
     return value if value > 0 else None
 
 
+def source_value(source, key, default=None):
+    """Read one value from Fermipy's Source mapping across Fermipy versions."""
+    try:
+        return source[key]
+    except (KeyError, TypeError):
+        return getattr(source, key, default)
+
+
 def write_ds9_regions(gta, source_configs, region_file, localization_results=None):
     """Write fitted centers, extended-source r68, and point localization r68."""
     localization_results = localization_results or {}
@@ -91,7 +99,10 @@ def write_ds9_regions(gta, source_configs, region_file, localization_results=Non
                         source_name,
                     )
             else:
-                r68 = extended_r68(spatial_model, source.get("SpatialWidth"))
+                r68 = extended_r68(
+                    spatial_model,
+                    source_value(source, "SpatialWidth"),
+                )
                 if r68 is None:
                     logger.warning(
                         "Cannot derive r68 for %s with spatial model %s; writing center only.",
