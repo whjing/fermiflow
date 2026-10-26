@@ -1,0 +1,59 @@
+# Generic spatial-hypothesis grid. `fermiflow init-spatial-grid` fills target
+# and energy labels in file paths. Edit source names, template paths, and
+# optional Slurm settings before generating jobs.
+
+base:
+  # CHANGE ME: XML containing every source that may appear in any hypothesis.
+  input_model: ../products___ENERGY_LABEL__/__ANALYSIS_NAME___input.xml
+  spatial_template: ../configs/spatial___TARGET_____ENERGY_LABEL__.yaml
+  output_root: ../products___ENERGY_LABEL__/spatial_grid
+  # model_policy: ../configs/model_policy_spatial.yaml
+
+sources:
+  # Every source name must exactly match the input XML.
+  - name: __TARGET__
+    include: [true]
+    models: [point, gaussian, disk]
+    # Supply r68 only when an extended model cannot inherit a radial width.
+    seed:
+      # ra: 0.0                 # optional, degrees; otherwise use XML value
+      # dec: 0.0                # optional, degrees; otherwise use XML value
+      r68: 0.3                  # CHANGE ME if Gaussian/Disk is tested; degrees
+
+  # Example optional companion: uncomment and replace the name/models.
+  # - name: candidate_source
+  #   include: [true, false]
+  #   models: [point]
+
+slurm:
+  conda_env: fermi             # CHANGE ME if your environment has another name
+  # conda_sh: /path/to/conda.sh  # Optional if `conda` is unavailable in Slurm
+  working_dir: ../scripts
+  # nodes: [node001, node002]   # Optional; omit to let Slurm choose
+  sbatch_dir: ../sbatch/spatial_grid
+  log_dir: ../logs/spatial_grid
+
+gtlike:
+  # CHANGE ME: project YAML, not an XML model.
+  project_config: ../configs/__TARGET_____ENERGY_LABEL__.yaml
+  # Defaults to base.input_model. It supplies spectra/backgrounds unchanged;
+  # only best-fit spatial parameters are inserted into each reloc input XML.
+  # template_model: ../products___ENERGY_LABEL__/__ANALYSIS_NAME___model.xml
+  # model_policy: ../configs/model_policy_like.yaml
+  slurm:
+    sbatch_dir: ../sbatch/gtlike_grid
+    log_dir: ../logs/gtlike_grid
+
+comparison:
+  output: ../products___ENERGY_LABEL__/spatial_grid/likelihood_comparison.csv
+
+# Optional common TS-map plot after spatial jobs finish.
+# plot:
+#   tsmap: ../products___ENERGY_LABEL__/__ANALYSIS_NAME___tsmap.fits
+#   radio_contours: ../data/regions/__TARGET__-radio.ctr
+#   output: ../figures/__TARGET___spatial_grid.png
+#   ncols: 4
+#   cmap: inferno
+#   power_gamma: 1.0
+#   vmin: -1.0
+#   vmax_percentile: 99.99

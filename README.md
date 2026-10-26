@@ -1,6 +1,6 @@
 # fermiflow
 
-用于 Fermi-LAT binned-likelihood 与 Fermipy 空间拟合的轻量工作流。仓库以 Kes 27 的分析参数为示例，但日常使用时应为每个目标单独生成 YAML 配置，避免覆盖已有结果。
+用于 Fermi-LAT binned-likelihood 与 Fermipy 空间拟合的轻量工作流。仓库提供不绑定具体天体的 YAML 模板；每个项目都从模板生成自己的配置文件，避免覆盖已有结果。
 
 ## 目录结构
 
@@ -9,9 +9,6 @@ fermiflow/
 ├── fermiflow.py                  # 安装后提供 fermiflow 命令
 ├── pyproject.toml
 ├── README.md
-├── examples/
-│   └── kes27_100MeV.yaml         # 当前 Kes 27 配置示例
-│   └── model_policy_radial.yaml  # 独立的 XML 自由参数策略示例
 └── scripts/
     ├── run_fermitools.py          # Fermitools 主流程
     ├── fermi_target.py           # Fermitools 各个处理步骤
@@ -22,7 +19,12 @@ fermiflow/
     ├── download.sh               # URL 列表的并行 wget 下载
     ├── fix-sedbin.py             # 依照 TS 固定 SED bin 的低显著性背景源
     ├── plot_sed.py               # 绘制 SED、PL/LogParabola 与近似误差带
-    └── compute_likelihood.py     # 计算手动输入模型之间的 ΔTS
+    ├── compute_likelihood.py     # 计算手动输入模型之间的 ΔTS
+    └── templates/                # init 命令复制的通用 YAML 模板
+        ├── project.yaml
+        ├── model_policy.yaml
+        ├── spatial.yaml
+        └── spatial_grid.yaml
 ```
 
 没有 `src/` 或额外 Python 包层级。所有实际分析代码都在 `scripts/`；根目录只保留安装入口、说明和打包配置。
@@ -58,13 +60,17 @@ fermiflow path
 ## 为新目标创建配置
 
 ```bash
-fermiflow init ../configs/g328_4_100MeV.yaml
+fermiflow init ../configs/project.yaml
 ```
 
-此命令会生成一份不会覆盖已有文件的样本配置。默认约定是在项目的 `scripts/` 目录运行所有命令，因此项目级路径会使用 `../data`、`../rawdata`、`../products_*` 与 `../logs`。编辑其中的 `target`、`ra`、`dec`、能量范围、数据路径和产品目录。现有 Kes 27 参数可参照：
+此命令会从安装包内的 `scripts/templates/project.yaml` 复制一份不会覆盖已有文件的通用配置。默认约定是在项目的 `scripts/` 目录运行所有命令，因此项目级路径会使用 `../data`、`../rawdata`、`../products_*` 与 `../logs`。编辑其中标注 `CHANGE ME` 的 `target`、`ra`、`dec`、能量范围、数据路径和产品目录。
 
-```text
-examples/kes27_100MeV.yaml
+同样可生成独立的模型策略、空间拟合和空间组合模板：
+
+```bash
+fermiflow init-model-policy ../configs/model_policy.yaml
+fermiflow init-spatial ../configs/spatial.yaml --target my_target --energy-label 1GeV
+fermiflow init-spatial-grid ../configs/spatial_grid.yaml --target my_target --energy-label 1GeV
 ```
 
 最重要的设置为：
@@ -88,7 +94,7 @@ paths:
   log_dir: ../logs
 ```
 
-相对路径相对于运行命令时的当前目录。本文后续命令都假定当前目录是 `<project>/scripts/`；这正好匹配你目前的 G328 项目结构。
+相对路径相对于运行命令时的当前目录。本文后续命令都假定当前目录是 `<project>/scripts/`。
 
 对于首次 SED 分能段拟合，`files:` 还必须设置：
 
@@ -120,7 +126,7 @@ my_project/
 通过已安装命令运行：
 
 ```bash
-fermiflow run --config ../configs/g328_4_100MeV.yaml --mode MODE
+fermiflow run --config ../configs/project.yaml --mode MODE
 ```
 
 | 模式 | 功能 | `--input-model` |
@@ -134,7 +140,7 @@ fermiflow run --config ../configs/g328_4_100MeV.yaml --mode MODE
 ### 建立全能段数据产品
 
 ```bash
-fermiflow run --config ../configs/g328_4_100MeV.yaml --mode prepare
+fermiflow run --config ../configs/project.yaml --mode prepare
 ```
 
 `prepare` 仅建立事件、曝光和目录模型产品；它不替代正式的似然拟合。
@@ -142,7 +148,7 @@ fermiflow run --config ../configs/g328_4_100MeV.yaml --mode prepare
 ### 使用指定模型拟合全能段
 
 ```bash
-fermiflow run --config ../configs/g328_4_100MeV.yaml --mode like --input-model ../products_100MeV/model_input.xml
+fermiflow run --config ../configs/project.yaml --mode like --input-model ../products_100MeV/model_input.xml
 ```
 
 会依次执行 `gtsrcmaps`、`gtlike (DRMNFB)`、`gtlike (MINUIT)`，并生成 `*_srcmaps.fits`、`*_drmnfb.xml`、`*_minuit.xml` 与结果文件。
@@ -150,7 +156,7 @@ fermiflow run --config ../configs/g328_4_100MeV.yaml --mode like --input-model .
 ### 生成 TS map
 
 ```bash
-fermiflow run --config ../configs/g328_4_100MeV.yaml --mode tsmap --input-model ../products_100MeV/model_minuit.xml --size 5 --binsz 0.05
+fermiflow run --config ../configs/project.yaml --mode tsmap --input-model ../products_100MeV/model_minuit.xml --size 5 --binsz 0.05
 ```
 
 `size` 为图的边长（deg），`binsz` 为像素尺寸（deg）。一般使用收敛后的 `*_minuit.xml`。
@@ -158,7 +164,7 @@ fermiflow run --config ../configs/g328_4_100MeV.yaml --mode tsmap --input-model 
 ### 首次分能段 SED 拟合
 
 ```bash
-fermiflow run --config ../configs/g328_4_100MeV.yaml --mode bin --nbins 6 --ibin 1
+fermiflow run --config ../configs/project.yaml --mode bin --nbins 6 --ibin 1
 ```
 
 `--ibin` 从 1 开始。首次 `bin` 要求 `ltcube`、`base_gti`、`sed_model` 均存在；分 bin 边界由 `emin`、`emax` 和 `nbins` 自动以对数间隔计算。
@@ -166,7 +172,7 @@ fermiflow run --config ../configs/g328_4_100MeV.yaml --mode bin --nbins 6 --ibin
 ### 用改过的模型重跑已有 SED bin
 
 ```bash
-fermiflow run --config ../configs/g328_4_100MeV.yaml --mode bin-fit --nbins 6 --ibin 6 --input-model /absolute/path/my_target_sed_6bin06-mod_input.xml
+fermiflow run --config ../configs/project.yaml --mode bin-fit --nbins 6 --ibin 6 --input-model /absolute/path/my_target_sed_6bin06-mod_input.xml
 ```
 
 `bin-fit` 不会重复事件筛选、CCUBE 和曝光图计算，但会重新生成 source maps 和两次 gtlike。它会覆盖该 bin 目录中同名拟合产物；比较不同模型前应复制 XML 或保存结果目录。
@@ -191,17 +197,17 @@ radial:
   outside_policy: fixed
 background_norms: [gll_iem_v07, iso_P8R3_SOURCE_V3_v1]
 sources:
-  kes27: spectral
+  my_target: spectral
 ```
 
 指定源的 `sources:` 规则优先级最高，因而可用于强制放开目标源或指定邻源；例如 `nearby_source: norm`。没有位置的背景源不会套用半径分区，只会由 `background_norms` 或 `sources` 控制。
 
-如果只想放开 Kes 27 的所有参数，以及银河/各向同性背景的归一化，而固定其它全部源，则用更短的版本：
+如果只想放开目标源的所有参数，以及银河/各向同性背景的归一化，而固定其它全部源，则用更短的版本：
 
 ```yaml
 default_policy: fixed
 sources:
-  kes27: spectral
+  my_target: spectral
 background_norms: [gll_iem_v07, iso_P8R3_SOURCE_V3_v1]
 ```
 
@@ -225,15 +231,15 @@ fermiflow model --input-model ../data/models/target_input.xml --policy ../config
 若不写 `--output-model`，会自动创建同目录的 `target_input_edited.xml`。也可以完全不另建 YAML，直接在终端设定同一规则：
 
 ```bash
-fermiflow model --input-model ../data/models/target_input.xml --free-spectral-within 3 --free-norm-until 5 --ts-results ../products_1GeV/target_minuit_results.dat --ts-threshold 1 --background-norm gll_iem_v07 --background-norm iso_P8R3_SOURCE_V3_v1 --source-policy kes27=spectral
+fermiflow model --input-model ../data/models/target_input.xml --free-spectral-within 3 --free-norm-until 5 --ts-results ../products_1GeV/target_minuit_results.dat --ts-threshold 1 --background-norm gll_iem_v07 --background-norm iso_P8R3_SOURCE_V3_v1 --source-policy my_target=spectral
 ```
 
 如希望在拟合前临时调用同一个工具，而不改项目配置，则额外传入独立策略文件：
 
 ```bash
-fermiflow run --config ../configs/g328_4_100MeV.yaml --mode like --input-model ../data/models/target_input.xml --model-policy ../configs/model_policy.yaml
+fermiflow run --config ../configs/project.yaml --mode like --input-model ../data/models/target_input.xml --model-policy ../configs/model_policy.yaml
 
-fermiflow spatial --config ../configs/spatial_g328_4.yaml --model-policy ../configs/model_policy.yaml
+fermiflow spatial --config ../configs/spatial.yaml --model-policy ../configs/model_policy.yaml
 ```
 
 `fermiflow run` 会在原 XML 旁生成 `*_edited.xml`；`fermiflow spatial` 会把副本写入空间拟合输出目录的 `model_inputs/`，然后再开始分析。两者都不修改总 YAML 或原 XML。
@@ -241,7 +247,7 @@ fermiflow spatial --config ../configs/spatial_g328_4.yaml --model-policy ../conf
 ## Fermipy 空间分析
 
 ```bash
-fermiflow spatial --config ../configs/spatial_g328_4.yaml
+fermiflow spatial --config ../configs/spatial.yaml
 ```
 
 空间配置独立于 Fermitools 配置，使用 Fermipy 的 `fermipy:` 块以及顶层 `output:`、`outputs:` 和 `sources:`。例如：
@@ -270,20 +276,20 @@ sources:
 当需要系统比较多个源的 Point/Gaussian/Disk 模板，以及可选邻近点源是否存在时，使用独立的空间组合配置。先生成模板：
 
 ```bash
-fermiflow init-spatial-grid ../configs/spatial_grid.yaml --target kes27 --energy-label 1GeV
+fermiflow init-spatial-grid ../configs/spatial_grid.yaml --target my_target --energy-label 1GeV
 ```
 
 这个 YAML 与单个 `spatial_*.yaml` 分工不同：它不直接运行 Fermipy，而是从一个含全部候选源的基础 XML，生成每个空间假设独立的 XML、单模型空间 YAML、`.sbatch` 文件和 manifest。典型配置如下：
 
 ```yaml
 base:
-  input_model: ../products_1GeV/kes27_model-tem_input.xml
-  spatial_template: ../configs/spatial_kes27_1GeV.yaml
+  input_model: ../products_1GeV/my_target_1GeV_input.xml
+  spatial_template: ../configs/spatial_my_target_1GeV.yaml
   output_root: ../products_1GeV/spatial_grid
   # model_policy: ../configs/modify-model.yaml
 
 sources:
-  - name: kes27
+  - name: my_target
     include: [true]
     models: [point, gaussian, disk]
     seed:
@@ -306,8 +312,8 @@ sources:
 生成器使用完整源名，并以 `point`、`gaussian`、`disk` 表示空间模型。例如：
 
 ```text
-kes27-gaussian-extend-disk-pt-point
-kes27-gaussian-extend-disk
+my_target-gaussian-extend-disk-pt-point
+my_target-gaussian-extend-disk
 ```
 
 第二个组合没有 `pt`，因此不会出现 `pt-absent` 之类的占位名称。包含空格的正式源名在 XML 和 manifest 中保持不变；只在文件路径中把空格替换为连字符。
@@ -346,7 +352,7 @@ bash ../sbatch/spatial_grid/submit_spatial_grid.sh
 
 ```yaml
 sources:
-  - name: g328
+  - name: my_target
     spatial_model: PointSource
     localization: {}
   - name: extend
@@ -354,7 +360,7 @@ sources:
     extension: {}
 ```
 
-这表示对 `g328` 执行点源定位（`localize`），对 `extend` 执行 Gaussian 延展拟合（`extension`）；空字典表示继承空间模板 YAML 顶层 `localize:`、`extension:` 中的默认设置。组合生成器会以完整 tag 命名最终 XML 与 DS9 region，例如 `g328-point-extend-gaussian_spatial_final.xml` 和 `g328-point-extend-gaussian.reg`，便于将文件移出原目录后仍能辨认其模型组合。
+这表示对 `my_target` 执行点源定位（`localize`），对 `extend` 执行 Gaussian 延展拟合（`extension`）；空字典表示继承空间模板 YAML 顶层 `localize:`、`extension:` 中的默认设置。组合生成器会以完整 tag 命名最终 XML 与 DS9 region，例如 `my_target-point-extend-gaussian_spatial_final.xml` 和 `my_target-point-extend-gaussian.reg`，便于将文件移出原目录后仍能辨认其模型组合。
 
 ### 以重新定位后的 XML 批量运行 gtlike
 
@@ -364,9 +370,9 @@ sources:
 
 ```yaml
 gtlike:
-  project_config: ../configs/kes27_1GeV.yaml
+  project_config: ../configs/my_target_1GeV.yaml
   # Optional; defaults to base.input_model.
-  template_model: ../products_1GeV/kes27_1GeV_model-kes27.xml
+  template_model: ../products_1GeV/my_target_1GeV_model.xml
   # model_policy: ../configs/modify-model.yaml
   slurm:
     sbatch_dir: ../sbatch/gtlike_grid
@@ -432,9 +438,9 @@ TS_{\rm source}=2\left[(-\log L)_{\rm absent}-(-\log L)_{\rm present}\right].
 
 ```yaml
 plot:
-  tsmap: ../products_1GeV/kes27_best_tsmap.fits
-  radio_contours: ../data/regions/kes27-radio.ctr
-  output: ../figures/kes27_spatial_grid.png
+  tsmap: ../products_1GeV/my_target_1GeV_tsmap.fits
+  radio_contours: ../data/regions/my_target-radio.ctr
+  output: ../figures/my_target_spatial_grid.png
   ncols: 4
   cmap: inferno
   power_gamma: 0.5
@@ -476,13 +482,13 @@ bash download.sh ../urls.txt ../rawdata 6
 
 这里的 `6` 是同时运行的 wget 数。脚本使用 `wget --continue`，中断后用同一命令可继续下载未完成文件。
 
-## Kes 27 辅助脚本
+## 辅助脚本
 
 - `scripts/fix-sedbin.py`：从 SED 日志读取 TS，固定低显著性背景源并生成 `-mod_input.xml`。
 - `scripts/plot_sed.py`：读取 SED 日志和全能段 XML，绘制 (E^2dN/dE)、上限及近似谱误差带。
 - `scripts/compute_likelihood.py`：修改文件顶部的 `models` 字典后，计算相对模型的 (2\Delta\log\mathcal{L})。
 
-这三项仍记录当前 Kes 27 的具体文件名和路径。用于新目标时，请复制一份并明确更改输入文件；不要直接让新项目写入 Kes 27 的产品目录。
+这三项是可编辑的分析辅助脚本；用于新目标前，请先修改脚本顶部的目标名、输入 XML、日志和输出路径，避免写入其它项目的产品目录。
 
 ## 本地编辑与超算使用
 

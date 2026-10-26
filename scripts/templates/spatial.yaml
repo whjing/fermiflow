@@ -1,0 +1,84 @@
+# Generic Fermipy spatial-fit configuration.
+# `fermiflow init-spatial` fills target and energy labels in file paths.
+# Edit all CHANGE ME values before running.
+
+fermipy:
+  logging:
+    verbosity: 3
+
+  data:
+    evfile: ../products___ENERGY_LABEL__/__ANALYSIS_NAME___gti.fits
+    scfile: ../rawdata/spacecraft.fits  # CHANGE ME: actual SC*.fits filename
+    ltcube: ../data/__TARGET___ltcube.fits
+
+  binning:
+    roiwidth: 10.0             # CHANGE ME if needed; degrees
+    binsz: 0.1                 # degrees
+    binsperdec: 8
+
+  selection:
+    ra: 0.0                    # CHANGE ME: degrees
+    dec: 0.0                   # CHANGE ME: degrees
+    emin: 1000.0               # CHANGE ME: MeV
+    emax: 500000.0             # MeV
+    zmax: 90
+    evclass: 128
+    evtype: 3
+    # tmin/tmax are optional. Uncomment to impose a specific MET interval.
+    # tmin: 0
+    # tmax: 0
+    filter: 'DATA_QUAL>0 && LAT_CONFIG==1'
+    roicut: 'no'
+
+  gtlike:
+    edisp: false
+    irfs: P8R3_SOURCE_V3
+    edisp_disable: [isodiff, galdiff]
+
+  model:
+    # CHANGE ME if your shared Fermi data directory differs.
+    galdiff: ~/data/fermi/gll_iem_v07.fits
+    isodiff: ~/data/fermi/iso_P8R3_SOURCE_V3_v1.txt
+    catalogs:
+      - ../products___ENERGY_LABEL__/__ANALYSIS_NAME___input.xml
+
+  optimizer:
+    optimizer: MINUIT
+    min_fit_quality: 2
+    retries: 2
+    tol: 1.0e-8
+
+  # Defaults inherited by each extended source below.
+  extension:
+    make_tsmap: false
+    make_plots: true
+    fix_shape: true             # Keeps alpha/beta/index fixed during extension fits
+    free_background: false
+    width_min: 0.05             # degrees
+    width_max: 1.5              # degrees
+    width_nstep: 30
+    fit_position: true
+
+  # Defaults inherited by each point source below.
+  localize:
+    make_plots: false
+    fix_shape: true
+    dtheta_max: 1.0             # degrees
+    nstep: 20
+
+output: ../products___ENERGY_LABEL__/spatial___TARGET__
+outputs:
+  model_name: __TARGET___spatial_final
+  region_file: __TARGET__.reg
+
+sources:
+  # This exact name must exist in the input XML. Choose PointSource,
+  # RadialGaussian, or RadialDisk and adjust the matching block below.
+  - name: __TARGET__
+    spatial_model: PointSource
+    localization: {}
+
+  # Add a tested extended source, if applicable.
+  # - name: nearby_extended_source
+  #   spatial_model: RadialGaussian
+  #   extension: {}

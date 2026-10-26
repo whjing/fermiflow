@@ -1,0 +1,25 @@
+# Generic free-parameter policy for `fermiflow model` or `--model-policy`.
+# This is independent from the project YAML.
+
+radial:
+  # If this centre is omitted, each source's ROI_Center_Distance XML attribute
+  # is used. Uncomment and replace both values for another reference centre.
+  # center: {ra: 0.0, dec: 0.0}
+  zones:
+    - {max_radius: 3.0, policy: spectral}  # norm + fitted spectral shape
+    - {max_radius: 5.0, policy: norm}      # normalization only
+  outside_policy: fixed
+
+# Keep the diffuse-background normalizations free.
+background_norms: [gll_iem_v07, iso_P8R3_SOURCE_V3_v1]
+
+# Explicit rules override radial rules. Names must exactly match the XML.
+# sources:
+#   my_target: spectral
+#   nearby_source: norm
+
+# Optional: fix faint sources using a previous gtlike *_results.dat file.
+# ts_filter:
+#   results_file: ../products_1GeV/my_target_minuit_results.dat
+#   threshold: 1.0
+#   policy: fixed

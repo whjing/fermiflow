@@ -1,0 +1,38 @@
+# Generic Fermitools project configuration.
+# Copy once per target. Replace every value marked CHANGE ME before running.
+
+analysis:
+  target: my_target            # CHANGE ME: short source/project name
+  ra: 0.0                      # CHANGE ME: ROI centre, degrees (ICRS)
+  dec: 0.0                     # CHANGE ME: ROI centre, degrees (ICRS)
+  roi_radius: 15.0             # Event-selection radius, degrees
+  emin: 100.0                  # CHANGE ME if needed; MeV
+  emax: 500000.0               # MeV
+  zmax: 90                     # Zenith-angle cut, degrees
+  evclass: 128                 # P8R3 SOURCE
+  evtype: 3                    # FRONT + BACK
+  irfs: P8R3_SOURCE_V3
+  mapsize_deg: 10.0            # CMAP/CCUBE side length, degrees
+  binsz: 0.1                   # Spatial pixel size, degrees
+
+paths:
+  # Shared files usable by all Fermi projects on this machine.
+  common_data_dir: ~/data/fermi     # CHANGE ME if backgrounds/catalogue live elsewhere
+
+  # Project-specific directories. Paths are relative to the directory where
+  # you run fermiflow, normally <project>/scripts/.
+  project_data_dir: ../data
+  rawdata_dir: ../rawdata
+  products_dir: ../products_{energy_label}
+  log_dir: ../logs
+
+files:
+  # Set to null to rebuild the livetime cube during `--mode prepare`.
+  ltcube: "{project_data_dir}/{target}_ltcube.fits"
+  catalog: gll_psc_16yr_v38.xml
+  galactic: gll_iem_v07.fits
+  isotropic: iso_P8R3_SOURCE_V3_v1.txt
+
+  # Required only for `fermiflow run --mode bin`.
+  # base_gti: "{products_dir}/{analysis_name}_gti.fits"
+  # sed_model: "{project_data_dir}/models/my_target_sed_input.xml"

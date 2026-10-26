@@ -20,4 +20,4 @@ py-modules = ["fermiflow"]
 packages = ["scripts"]
 
 [tool.setuptools.package-data]
-scripts = ["*.sh"]
+scripts = ["*.sh", "templates/*.yaml"]

@@ -300,7 +300,7 @@ def write_sbatch(path, tag, config_path, slurm, model_policy):
                 *directives,
                 "",
                 "set -eo pipefail",
-                f"source {shlex.quote(str(slurm['conda_sh']))}",
+                *conda_activation_lines(slurm),
                 f"conda activate {shlex.quote(str(slurm['conda_env']))}",
                 f"cd {shlex.quote(str(slurm['working_dir']))}",
                 f"exec fermiflow spatial --config {shlex.quote(str(config_path))}{policy_argument}",
@@ -324,6 +324,19 @@ def write_submit_script(path, sbatch_files):
     commands.append("")
     path.write_text("\n".join(commands), encoding="utf-8")
     path.chmod(0o750)
+
+
+def conda_activation_lines(slurm):
+    """Return portable Conda initialization lines for generated batch scripts."""
+    if slurm.get("conda_sh"):
+        return [f"source {shlex.quote(str(slurm['conda_sh']))}"]
+    return [
+        'if ! command -v conda >/dev/null 2>&1; then',
+        '  echo "Conda is unavailable; set slurm.conda_sh in spatial_grid.yaml." >&2',
+        "  exit 1",
+        "fi",
+        'source "$(conda info --base)/etc/profile.d/conda.sh"',
+    ]
 
 
 def build_relocated_input(template_model, spatial_model, output_model, row, source_names):
@@ -389,10 +402,8 @@ def resolve_slurm_config(config, base_dir, default_root, default_name):
         config.get("working_dir", base_dir.parent / "scripts"), base_dir
     )
     config["conda_env"] = config.get("conda_env", "fermi")
-    config["conda_sh"] = resolve_path(
-        config.get("conda_sh", "/share/home/whjing/miniforge3/etc/profile.d/conda.sh"),
-        base_dir,
-    )
+    conda_sh = config.get("conda_sh")
+    config["conda_sh"] = resolve_path(conda_sh, base_dir) if conda_sh else None
     config["sbatch_dir"].mkdir(parents=True, exist_ok=True)
     config["log_dir"].mkdir(parents=True, exist_ok=True)
     return config
@@ -423,7 +434,7 @@ def write_gtlike_sbatch(path, tag, project_config, input_model, job_log, slurm):
                 *directives,
                 "",
                 "set -eo pipefail",
-                f"source {shlex.quote(str(slurm['conda_sh']))}",
+                *conda_activation_lines(slurm),
                 f"conda activate {shlex.quote(str(slurm['conda_env']))}",
                 f"cd {shlex.quote(str(slurm['working_dir']))}",
                 f"mkdir -p {shlex.quote(str(job_log.parent))}",
