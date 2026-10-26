@@ -149,7 +149,12 @@ def apply_spatial_model_edit(fermipy_config, policy, outdir):
 
 
 
-def run_source_spatial_fit(gta, source_config):
+def run_source_spatial_fit(
+    gta,
+    source_config,
+    extension_defaults=None,
+    localization_defaults=None,
+):
     """Run one configured point-source localization or extension fit."""
     source_name = source_config["name"]
     spatial_model = source_config.get("spatial_model", "PointSource")
@@ -168,6 +173,7 @@ def run_source_spatial_fit(gta, source_config):
             "dtheta_max": 1.0,
             "nstep": 20,
         }
+        options.update(localization_defaults or {})
         options.update(source_config.get("localization", {}))
 
         logger.info("Localizing point source: %s", source_name)
@@ -186,6 +192,7 @@ def run_source_spatial_fit(gta, source_config):
             "width_max": 1.5,
             "width_nstep": 30,
         }
+        options.update(extension_defaults or {})
         options.update(source_config.get("extension", {}))
 
         logger.info(
@@ -219,6 +226,8 @@ def main():
     )
 
     fit_options = fermipy_config.get("optimizer", {})
+    extension_defaults = fermipy_config.get("extension", {})
+    localization_defaults = fermipy_config.get("localize", {})
     sources = config.get("sources", [])
 
     output_config = config.get("outputs", {})
@@ -241,7 +250,12 @@ def main():
     for source_config in sources:
         source_config = copy.deepcopy(source_config)
         source_config.setdefault("fit", fit_options)
-        run_source_spatial_fit(gta, source_config)
+        run_source_spatial_fit(
+            gta,
+            source_config,
+            extension_defaults,
+            localization_defaults,
+        )
         
     write_final_products(gta, sources, outdir, output_config)
     logger.info("Spatial fitting completed.")

@@ -76,6 +76,102 @@ files:
     print(f"Created sample project configuration: {path}")
 
 
+def write_sample_spatial_config(path: Path, target: str, energy_label: str) -> None:
+    """Write a Fermipy spatial-fit template without overwriting an existing file."""
+    if path.exists():
+        raise SystemExit(f"Refusing to overwrite existing file: {path}")
+
+    analysis_name = f"{target}_{energy_label}"
+    sample = f"""# Paths below are resolved relative to this YAML file in configs/.
+fermipy:
+  logging:
+    verbosity: 3
+
+  data:
+    evfile: ../products_{energy_label}/{analysis_name}_gti.fits
+    scfile: ../rawdata/spacecraft.fits  # Change to the actual SC*.fits filename.
+    ltcube: ../data/{target}_ltcube.fits
+
+  binning:
+    roiwidth: 10.0
+    binsz: 0.05
+    binsperdec: 8
+
+  selection:
+    ra: 0.0          # deg: replace with target center
+    dec: 0.0         # deg: replace with target center
+    emin: 1000.0     # MeV
+    emax: 500000.0   # MeV
+    zmax: 90
+    evclass: 128
+    evtype: 3
+    tmin: 239557417  # MET: replace when needed
+    tmax: 794361605  # MET: replace when needed
+    filter: 'DATA_QUAL>0 && LAT_CONFIG==1'
+    roicut: 'no'
+
+  gtlike:
+    edisp: false
+    irfs: P8R3_SOURCE_V3
+    edisp_disable: [isodiff, galdiff]
+
+  model:
+    galdiff: ~/data/fermi/gll_iem_v07.fits
+    isodiff: ~/data/fermi/iso_P8R3_SOURCE_V3_v1.txt
+    catalogs:
+      - ../products_{energy_label}/{analysis_name}_input.xml
+
+  optimizer:
+    optimizer: MINUIT
+    min_fit_quality: 2
+    retries: 2
+    tol: 1.0e-8
+
+  # Defaults inherited by every extended source below.
+  extension:
+    make_tsmap: false
+    make_plots: true
+    fix_shape: true
+    free_background: false
+    width_min: 0.05
+    width_max: 1.5
+    width_nstep: 30
+    fit_position: true
+
+  # Defaults inherited by every localized point source below.
+  localize:
+    make_plots: false
+    fix_shape: true
+    dtheta_max: 1.0
+    nstep: 20
+
+output: ../products_{energy_label}/spatial_{target}
+outputs:
+  model_name: spatial_fit_final
+  region_file: spatial_fit_final.reg
+
+sources:
+  # Names must exactly match the input XML.
+  - name: {target}
+    spatial_model: RadialGaussian
+    extension: {{}}
+
+  # Uncomment and edit only if the model contains these sources.
+  # - name: extend
+  #   spatial_model: RadialDisk
+  #   extension:
+  #     width_nstep: 30
+  #     fit_position: true
+
+  # - name: pt
+  #   spatial_model: PointSource
+  #   localization: {{}}
+"""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(sample, encoding="utf-8")
+    print(f"Created sample spatial configuration: {path}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="fermiflow",
@@ -88,6 +184,12 @@ def main() -> None:
     subparsers.add_parser("init", help="Create a sample Fermitools YAML file.").add_argument(
         "config", nargs="?", type=Path, default=Path("project.yaml")
     )
+    spatial_init = subparsers.add_parser(
+        "init-spatial", help="Create a sample Fermipy spatial-fit YAML file."
+    )
+    spatial_init.add_argument("config", nargs="?", type=Path, default=Path("spatial.yaml"))
+    spatial_init.add_argument("--target", default="my_target")
+    spatial_init.add_argument("--energy-label", default="2GeV")
     subparsers.add_parser("run", help="Run the Fermitools workflow.").add_argument(
         "args", nargs=argparse.REMAINDER, help="Arguments passed to scripts/run_kes27.py."
     )
@@ -108,6 +210,12 @@ def main() -> None:
 
     if args.command == "init":
         write_sample_config(args.config.expanduser().resolve())
+        return
+
+    if args.command == "init-spatial":
+        write_sample_spatial_config(
+            args.config.expanduser().resolve(), args.target, args.energy_label
+        )
         return
 
     script_name = {
