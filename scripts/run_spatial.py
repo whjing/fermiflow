@@ -8,6 +8,7 @@ Example:
 import argparse
 import copy
 import logging
+import math
 from pathlib import Path
 
 import yaml
@@ -18,8 +19,38 @@ from utils import configure_logger, require_file, render_path
 
 logger = logging.getLogger("spatial_fit")
 
-def write_ds9_regions(gta, source_configs, region_file):
-    """Write final fitted source positions and r68 extensions as DS9 regions."""
+
+GAUSSIAN_R68_PER_SIGMA = math.sqrt(-2.0 * math.log(1.0 - 0.68))
+DISK_R68_PER_RADIUS = math.sqrt(0.68)
+
+
+def extended_r68(spatial_model, spatial_width):
+    """Convert a Fermipy spatial-template width in degrees to containment r68."""
+    if spatial_width is None or spatial_width <= 0:
+        return None
+    if spatial_model == "RadialGaussian":
+        return spatial_width * GAUSSIAN_R68_PER_SIGMA
+    if spatial_model == "RadialDisk":
+        return spatial_width * DISK_R68_PER_RADIUS
+    return None
+
+
+def localization_r68(localization_result):
+    """Return Fermipy's 68% localization radius in degrees, when available."""
+    if not localization_result:
+        return None
+
+    value = localization_result.get("pos_r68", localization_result.get("r68"))
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return None
+    return value if value > 0 else None
+
+
+def write_ds9_regions(gta, source_configs, region_file, localization_results=None):
+    """Write fitted centers, extended-source r68, and point localization r68."""
+    localization_results = localization_results or {}
 
     with region_file.open("w", encoding="utf-8") as handle:
         handle.write("# Region file format: DS9 version 4.1\n")
@@ -44,13 +75,34 @@ def write_ds9_regions(gta, source_configs, region_file):
             ra = source["ra"]
             dec = source["dec"]
             spatial_model = source["SpatialModel"]
-            r68 = source.get("SpatialWidth")
+            requested_model = source_config.get("spatial_model", "PointSource")
+            is_point_source = requested_model == "PointSource"
 
-            if r68 is not None and r68 > 0:
-                handle.write(
-                    f"circle({ra:.6f},{dec:.6f},{r68:.6f}d) "
-                    f"# color=cyan text={{{source_name} {spatial_model} r68}}\n"
-                )
+            if is_point_source:
+                pos_r68 = localization_r68(localization_results.get(source_name))
+                if pos_r68 is not None:
+                    handle.write(
+                        f"circle({ra:.6f},{dec:.6f},{pos_r68:.6f}d) "
+                        f"# color=yellow dash=1 text={{{source_name} pos_r68={pos_r68:.4f} deg}}\n"
+                    )
+                else:
+                    logger.warning(
+                        "No pos_r68 available for point source %s; writing center only.",
+                        source_name,
+                    )
+            else:
+                r68 = extended_r68(spatial_model, source.get("SpatialWidth"))
+                if r68 is None:
+                    logger.warning(
+                        "Cannot derive r68 for %s with spatial model %s; writing center only.",
+                        source_name,
+                        spatial_model,
+                    )
+                else:
+                    handle.write(
+                        f"circle({ra:.6f},{dec:.6f},{r68:.6f}d) "
+                        f"# color=cyan text={{{source_name} r68={r68:.4f} deg}}\n"
+                    )
 
             handle.write(
                 f"point({ra:.6f},{dec:.6f}) "
@@ -60,7 +112,13 @@ def write_ds9_regions(gta, source_configs, region_file):
     logger.info("DS9 region written: %s", region_file)
 
 
-def write_final_products(gta, source_configs, outdir, output_config):
+def write_final_products(
+    gta,
+    source_configs,
+    outdir,
+    output_config,
+    localization_results=None,
+):
     """Write the final Fermipy XML model and matching DS9 region file."""
 
     model_name = Path(
@@ -76,7 +134,7 @@ def write_final_products(gta, source_configs, outdir, output_config):
     model_file = outdir / f"{model_name}.xml"
     region_file = outdir / region_name
 
-    write_ds9_regions(gta, source_configs, region_file)
+    write_ds9_regions(gta, source_configs, region_file, localization_results)
 
     logger.info("Final ROI model: %s", model_file)
     logger.info("Final DS9 region: %s", region_file)
@@ -177,7 +235,7 @@ def run_source_spatial_fit(
         options.update(source_config.get("localization", {}))
 
         logger.info("Localizing point source: %s", source_name)
-        gta.localize(source_name, **options)
+        localization_result = gta.localize(source_name, **options)
 
     else:
         options = {
@@ -201,8 +259,10 @@ def run_source_spatial_fit(
             spatial_model,
         )
         gta.extension(source_name, **options)
+        localization_result = None
 
     gta.fit(**source_config.get("fit", {}))
+    return localization_result
 
 
 def main():
@@ -247,17 +307,26 @@ def main():
     gta.print_params(True)
     gta.write_roi("fit_model", make_plots=True)
 
+    localization_results = {}
     for source_config in sources:
         source_config = copy.deepcopy(source_config)
         source_config.setdefault("fit", fit_options)
-        run_source_spatial_fit(
+        localization_result = run_source_spatial_fit(
             gta,
             source_config,
             extension_defaults,
             localization_defaults,
         )
+        if localization_result is not None:
+            localization_results[source_config["name"]] = localization_result
         
-    write_final_products(gta, sources, outdir, output_config)
+    write_final_products(
+        gta,
+        sources,
+        outdir,
+        output_config,
+        localization_results,
+    )
     logger.info("Spatial fitting completed.")
 
 
