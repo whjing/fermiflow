@@ -137,9 +137,20 @@ def write_final_products(
         f"{model_name}.reg",
     )
 
+    previous_models = set(outdir.glob(f"{model_name}*.xml"))
     gta.write_roi(model_name, make_plots=False)
 
+    # Fermipy commonly appends an iteration suffix such as ``_00`` to the
+    # XML it writes.  Keep a stable, tag-specific XML filename for the next
+    # gtlike stage while retaining Fermipy's other products unchanged.
     model_file = outdir / f"{model_name}.xml"
+    created_models = set(outdir.glob(f"{model_name}*.xml")) - previous_models
+    written_models = created_models or set(outdir.glob(f"{model_name}_*.xml"))
+    if written_models:
+        written_model = max(written_models, key=lambda path: path.stat().st_mtime)
+        if written_model != model_file:
+            written_model.replace(model_file)
+            logger.info("Normalized Fermipy XML name: %s", model_file)
     region_file = outdir / region_name
 
     write_ds9_regions(

@@ -545,10 +545,20 @@ def prepare_gtlike(config_path):
     prepared = 0
 
     for index, row in enumerate(rows):
-        final_model = Path(
+        expected_final_model = Path(
             row.get("spatial_final_model")
             or Path(row["output_dir"]) / f"{row['tag']}_spatial_final.xml"
         )
+        final_model = expected_final_model
+        if not final_model.is_file():
+            # Support grid runs made before final XML names were normalized:
+            # Fermipy wrote names such as <tag>_spatial_final_00.xml.
+            candidates = sorted(
+                expected_final_model.parent.glob(f"{expected_final_model.stem}_*.xml"),
+                key=lambda path: path.stat().st_mtime,
+            )
+            if candidates:
+                final_model = candidates[-1]
         if not final_model.is_file():
             row["gtlike_status"] = "spatial_pending"
             continue
@@ -577,6 +587,7 @@ def prepare_gtlike(config_path):
         )
         row.update(
             {
+                "spatial_final_model": str(final_model),
                 "reloc_input_model": str(reloc_input),
                 "gtlike_log": str(job_log),
                 "gtlike_sbatch": str(sbatch_file),
