@@ -572,6 +572,11 @@ class FermiTarget:
             -> gtlike (DRMNFB)
             -> gtlike (MINUIT)
         """
+        # 如果input_model不是以input.xml结尾，报错
+        if not input_model.endswith("_input.xml"):
+            raise ValueError(
+                f"Input model filename must end with '_input.xml', got: {input_model}"
+            )
 
         # Define output filenames
         srcmaps = input_model.replace("_input.xml", "_srcmaps.fits")
