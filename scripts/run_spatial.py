@@ -8,7 +8,6 @@ Example:
 import argparse
 import copy
 import logging
-import math
 from pathlib import Path
 
 import yaml
@@ -18,21 +17,6 @@ from utils import configure_logger, require_file, render_path
 
 
 logger = logging.getLogger("spatial_fit")
-
-
-GAUSSIAN_R68_PER_SIGMA = math.sqrt(-2.0 * math.log(1.0 - 0.68))
-DISK_R68_PER_RADIUS = math.sqrt(0.68)
-
-
-def extended_r68(spatial_model, spatial_width):
-    """Convert a Fermipy spatial-template width in degrees to containment r68."""
-    if spatial_width is None or spatial_width <= 0:
-        return None
-    if spatial_model == "RadialGaussian":
-        return spatial_width * GAUSSIAN_R68_PER_SIGMA
-    if spatial_model == "RadialDisk":
-        return spatial_width * DISK_R68_PER_RADIUS
-    return None
 
 
 def localization_r68(localization_result):
@@ -48,17 +32,31 @@ def localization_r68(localization_result):
     return value if value > 0 else None
 
 
-def source_value(source, key, default=None):
-    """Read one value from Fermipy's Source mapping across Fermipy versions."""
-    try:
-        return source[key]
-    except (KeyError, TypeError):
-        return getattr(source, key, default)
+def extension_r68(extension_result):
+    """Read Fermipy's best-fit extension radius from ``gta.extension`` output."""
+    if not extension_result:
+        return None
+
+    for key in ("ext", "extension", "SpatialWidth"):
+        try:
+            value = float(extension_result.get(key))
+        except (AttributeError, TypeError, ValueError):
+            continue
+        if value > 0:
+            return value
+    return None
 
 
-def write_ds9_regions(gta, source_configs, region_file, localization_results=None):
+def write_ds9_regions(
+    gta,
+    source_configs,
+    region_file,
+    localization_results=None,
+    extension_results=None,
+):
     """Write fitted centers, extended-source r68, and point localization r68."""
     localization_results = localization_results or {}
+    extension_results = extension_results or {}
 
     with region_file.open("w", encoding="utf-8") as handle:
         handle.write("# Region file format: DS9 version 4.1\n")
@@ -99,13 +97,11 @@ def write_ds9_regions(gta, source_configs, region_file, localization_results=Non
                         source_name,
                     )
             else:
-                r68 = extended_r68(
-                    spatial_model,
-                    source_value(source, "SpatialWidth"),
-                )
+                r68 = extension_r68(extension_results.get(source_name))
                 if r68 is None:
                     logger.warning(
-                        "Cannot derive r68 for %s with spatial model %s; writing center only.",
+                        "No best-fit extension result for %s with spatial model %s; "
+                        "writing center only.",
                         source_name,
                         spatial_model,
                     )
@@ -129,6 +125,7 @@ def write_final_products(
     outdir,
     output_config,
     localization_results=None,
+    extension_results=None,
 ):
     """Write the final Fermipy XML model and matching DS9 region file."""
 
@@ -145,7 +142,13 @@ def write_final_products(
     model_file = outdir / f"{model_name}.xml"
     region_file = outdir / region_name
 
-    write_ds9_regions(gta, source_configs, region_file, localization_results)
+    write_ds9_regions(
+        gta,
+        source_configs,
+        region_file,
+        localization_results,
+        extension_results,
+    )
 
     logger.info("Final ROI model: %s", model_file)
     logger.info("Final DS9 region: %s", region_file)
@@ -230,7 +233,7 @@ def run_source_spatial_fit(
 
     if source_name not in gta.roi:
         logger.warning("Source not found in ROI, skipped: %s", source_name)
-        return
+        return None, None
 
     gta.fit(**source_config.get("fit", {}))
 
@@ -247,6 +250,7 @@ def run_source_spatial_fit(
 
         logger.info("Localizing point source: %s", source_name)
         localization_result = gta.localize(source_name, **options)
+        extension_result = None
 
     else:
         options = {
@@ -269,11 +273,11 @@ def run_source_spatial_fit(
             source_name,
             spatial_model,
         )
-        gta.extension(source_name, **options)
+        extension_result = gta.extension(source_name, **options)
         localization_result = None
 
     gta.fit(**source_config.get("fit", {}))
-    return localization_result
+    return localization_result, extension_result
 
 
 def main():
@@ -319,10 +323,11 @@ def main():
     gta.write_roi("fit_model", make_plots=True)
 
     localization_results = {}
+    extension_results = {}
     for source_config in sources:
         source_config = copy.deepcopy(source_config)
         source_config.setdefault("fit", fit_options)
-        localization_result = run_source_spatial_fit(
+        localization_result, extension_result = run_source_spatial_fit(
             gta,
             source_config,
             extension_defaults,
@@ -330,6 +335,8 @@ def main():
         )
         if localization_result is not None:
             localization_results[source_config["name"]] = localization_result
+        if extension_result is not None:
+            extension_results[source_config["name"]] = extension_result
         
     write_final_products(
         gta,
@@ -337,6 +344,7 @@ def main():
         outdir,
         output_config,
         localization_results,
+        extension_results,
     )
     logger.info("Spatial fitting completed.")
 

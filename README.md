@@ -446,7 +446,7 @@ plot:
 fermiflow spatial-grid --config ../configs/spatial_grid.yaml --plot
 ```
 
-绘图器从 manifest 查找已存在的最终 `.reg` 文件，以同一张 TS map 画成子图；可选叠加 `.ctr` 射电等高线。最终 region 图中，延展源的实线圆是空间模板的 \(r_{68}\)，点源的虚线圆是定位误差 `pos_r68`，两者不可作相同的物理解释。
+绘图器从 manifest 查找已存在的最终 `.reg` 文件，以同一张 TS map 画成子图；可选叠加 `.ctr` 射电等高线。最终 region 图中，延展源的实线圆半径直接取自 `gta.extension()` 的 best-fit extension（即日志的 `Best-fit extension`）；点源的虚线圆是定位误差 `pos_r68`，两者不可作相同的物理解释。
 
 ## 用链接文本多核下载 Fermi 数据
 
