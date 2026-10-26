@@ -15,6 +15,7 @@ import numpy as np
 import yaml
 
 from fermi_target import FermiTarget, logger
+from model_editor import apply_model_policy, default_output_path, load_model_policy
 from utils import configure_logger, require_file, render_path
 
 
@@ -103,6 +104,26 @@ def load_project(config_file, emin_override=None, emax_override=None):
     return project
 
 
+def edited_model(project, input_model, model_policy):
+    """Create and return a policy-edited XML when a policy was supplied."""
+    input_model = require_file(input_model, "Input model")
+    if not model_policy:
+        return input_model
+
+    policy = dict(model_policy)
+    radial = policy.get("radial")
+    if radial and "center" not in radial:
+        radial = dict(radial)
+        radial["center"] = {"ra": project["ra"], "dec": project["dec"]}
+        policy["radial"] = radial
+
+    output_model = default_output_path(input_model)
+    summary = apply_model_policy(input_model, output_model, policy)
+    logger.info("Model policy applied: %s -> %s", input_model, output_model)
+    logger.info("Model policy changed %d parameters.", sum(item[2] for item in summary))
+    return output_model
+
+
 def make_target(
     project,
     name,
@@ -170,9 +191,9 @@ def run_prepare(project):
 
     return target
 
-def run_like(project, input_model):
+def run_like(project, input_model, model_policy=None):
     require_full_band_products(project)
-    input_model = require_file(input_model, "Input model")
+    input_model = edited_model(project, input_model, model_policy)
     target = make_target(
         project,
         project["analysis_name"],
@@ -183,7 +204,7 @@ def run_like(project, input_model):
     return target.run_gtsrcmap_gtlike2(str(input_model), source_name=project["target"])
 
 
-def run_sed_bin(project, nbins, bin_index):
+def run_sed_bin(project, nbins, bin_index, model_policy=None):
     if nbins < 1 or not 0 <= bin_index < nbins:
         raise ValueError(f"--ibin must be between 0 and {nbins - 1}.")
 
@@ -202,6 +223,7 @@ def run_sed_bin(project, nbins, bin_index):
 
     input_model = outdir / f"{project['target']}_sed_{nbins}bin{number:02d}_input.xml"
     shutil.copy2(base_model, input_model)
+    input_model = edited_model(project, input_model, model_policy)
     target = make_target(
         project,
         f"{project['target']}_{nbins}bin{number:02d}",
@@ -225,12 +247,12 @@ def sed_bin_output_dir(project, nbins, bin_index):
     return (project["products_dir"] / tag).resolve(), emin, emax
 
 
-def run_sed_bin_fit(project, nbins, bin_index, input_model):
+def run_sed_bin_fit(project, nbins, bin_index, input_model, model_policy=None):
     """Refit an existing SED bin without repeating event selection."""
     if nbins < 1 or not 0 <= bin_index < nbins:
         raise ValueError(f"--ibin must be between 0 and {nbins - 1}.")
 
-    input_model = require_file(input_model, "Input model")
+    input_model = edited_model(project, input_model, model_policy)
     require_file(project["ltcube"], "Livetime cube")
     outdir, emin, emax = sed_bin_output_dir(project, nbins, bin_index)
     if not outdir.is_dir():
@@ -260,9 +282,9 @@ def run_sed_bin_fit(project, nbins, bin_index, input_model):
     return target.run_gtsrcmap_gtlike2(str(model_copy), source_name=project["target"])
 
 
-def run_tsmap(project, input_model, size, binsz):
+def run_tsmap(project, input_model, size, binsz, model_policy=None):
     require_full_band_products(project)
-    input_model = require_file(input_model, "Input model")
+    input_model = edited_model(project, input_model, model_policy)
     if size <= 0 or binsz <= 0:
         raise ValueError("--size and --binsz must be positive.")
     target = make_target(
@@ -309,6 +331,10 @@ def parse_args():
     parser.add_argument(
         "--log-name", help="Log basename; timestamp is appended automatically."
     )
+    parser.add_argument(
+        "--model-policy", type=Path,
+        help="Optional standalone YAML policy used to create an edited XML before fitting.",
+    )
     args = parser.parse_args()
 
     if args.mode in {"like", "tsmap"} and args.input_model is None:
@@ -328,6 +354,7 @@ def parse_args():
 def main():
     args = parse_args()
     project = load_project(args.config, args.emin, args.emax)
+    model_policy = load_model_policy(args.model_policy) if args.model_policy else None
     log_name = args.log_name or f"{args.mode}_{project['energy_label']}"
     log_file = configure_logger(logger, project["log_dir"], log_name)
     logger.info("Log file: %s", log_file)
@@ -337,17 +364,19 @@ def main():
     logger.info("Energy range: %g--%g MeV", project["emin"], project["emax"])
     if args.input_model is not None:
         logger.info("Input model: %s", args.input_model.expanduser().resolve())
+    if args.model_policy is not None:
+        logger.info("Model policy: %s", args.model_policy.expanduser().resolve())
 
     if args.mode == "prepare":
         run_prepare(project)
     elif args.mode == "like":
-        run_like(project, args.input_model)
+        run_like(project, args.input_model, model_policy)
     elif args.mode == "bin":
-        run_sed_bin(project, args.nbins, args.ibin - 1)
+        run_sed_bin(project, args.nbins, args.ibin - 1, model_policy)
     elif args.mode == "bin-fit":
-        run_sed_bin_fit(project, args.nbins, args.ibin - 1, args.input_model)
+        run_sed_bin_fit(project, args.nbins, args.ibin - 1, args.input_model, model_policy)
     elif args.mode == "tsmap":
-        run_tsmap(project, args.input_model, args.size, args.binsz)
+        run_tsmap(project, args.input_model, args.size, args.binsz, model_policy)
     else:
         logger.error("Unknown mode: %s", args.mode)
 

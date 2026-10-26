@@ -97,6 +97,9 @@ def main() -> None:
     subparsers.add_parser("download", help="Download URLs in parallel with wget.").add_argument(
         "args", nargs=argparse.REMAINDER, help="Arguments passed to scripts/download.sh."
     )
+    subparsers.add_parser("model", help="Create an XML with a parameter-freeing policy.").add_argument(
+        "args", nargs=argparse.REMAINDER, help="Arguments passed to scripts/model_editor.py."
+    )
 
     args = parser.parse_args()
     if args.command == "path":
@@ -111,6 +114,7 @@ def main() -> None:
         "run": "run_kes27.py",
         "spatial": "run_spatial.py",
         "download": "download.sh",
+        "model": "model_editor.py",
     }[args.command]
     raise SystemExit(run_script(script_name, args.args))
 

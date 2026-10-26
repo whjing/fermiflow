@@ -1,0 +1,19 @@
+# Standalone XML free-parameter policy.  This file is not part of project.yaml.
+# Use with: fermiflow model -- --input-model MODEL.xml --policy model_policy_radial.yaml
+# Or:       fermiflow run -- --config project.yaml --mode like --input-model MODEL.xml --model-policy model_policy_radial.yaml
+
+radial:
+  # Omit center when called through `fermiflow run` or `fermiflow spatial`:
+  # their analysis center is supplied automatically.  Keep it here for
+  # completely standalone use of `fermiflow model`.
+  center: {ra: 237.083, dec: -53.8167}
+  zones:
+    - {max_radius: 3.0, policy: all}
+    - {max_radius: 5.0, policy: norm}
+  outside_policy: fixed
+
+background_norms: [gll_iem_v07, iso_P8R3_SOURCE_V3_v1]
+
+# Explicit names override radial rules.
+sources:
+  kes27: all

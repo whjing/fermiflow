@@ -1,4 +1,4 @@
-# Fixed settings for the Kes 27 project.
+# example configuration file
 analysis:
   target: kes27
   ra: 237.083

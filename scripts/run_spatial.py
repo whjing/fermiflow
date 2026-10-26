@@ -12,6 +12,7 @@ from pathlib import Path
 
 import yaml
 from fermipy.gtanalysis import GTAnalysis
+from model_editor import apply_model_policy, default_output_path, load_model_policy
 from utils import configure_logger, require_file, render_path
 
 
@@ -84,6 +85,10 @@ def write_final_products(gta, source_configs, outdir, output_config):
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", required=True, type=Path)
+    parser.add_argument(
+        "--model-policy", type=Path,
+        help="Optional standalone YAML policy used to create edited catalog XML files.",
+    )
     return parser.parse_args()
 
 
@@ -114,6 +119,37 @@ def resolve_fermipy_paths(config, base_dir):
     ]
 
     return config
+
+
+def apply_spatial_model_edit(fermipy_config, policy, outdir):
+    """Replace XML catalog paths with policy-edited copies for this run."""
+    if not policy or policy.get("enabled", True) is False:
+        return fermipy_config
+
+    policy = copy.deepcopy(policy)
+    radial = policy.get("radial")
+    if radial and "center" not in radial:
+        radial = dict(radial)
+        selection = fermipy_config.get("selection", {})
+        radial["center"] = {
+            "ra": selection["ra"],
+            "dec": selection["dec"],
+        }
+        policy["radial"] = radial
+
+    input_dir = outdir / "model_inputs"
+    catalogs = fermipy_config.get("model", {}).get("catalogs", [])
+    edited_catalogs = []
+    for catalog in catalogs:
+        catalog = Path(catalog)
+        output_model = input_dir / default_output_path(catalog).name
+        summary = apply_model_policy(catalog, output_model, policy)
+        logger.info("Model policy applied: %s -> %s", catalog, output_model)
+        logger.info("Model policy changed %d parameters.", sum(item[2] for item in summary))
+        edited_catalogs.append(str(output_model))
+
+    fermipy_config["model"]["catalogs"] = edited_catalogs
+    return fermipy_config
 
 
 
@@ -180,6 +216,11 @@ def main():
     outdir.mkdir(parents=True, exist_ok=True)
     fermipy_config.setdefault("fileio", {})
     fermipy_config["fileio"]["outdir"] = str(outdir)
+    fermipy_config = apply_spatial_model_edit(
+        fermipy_config,
+        load_model_policy(args.model_policy) if args.model_policy else None,
+        outdir,
+    )
 
     fit_options = fermipy_config.get("optimizer", {})
     sources = config.get("sources", [])

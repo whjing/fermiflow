@@ -11,11 +11,13 @@ fermiflow/
 ├── README.md
 ├── examples/
 │   └── kes27_100MeV.yaml         # 当前 Kes 27 配置示例
+│   └── model_policy_radial.yaml  # 独立的 XML 自由参数策略示例
 └── scripts/
     ├── run_kes27.py              # Fermitools 主流程
     ├── fermi_target.py           # Fermitools 各个处理步骤
     ├── run_spatial.py            # Fermipy 定位与延展拟合
     ├── utils.py                  # 日志与路径公共函数
+    ├── model_editor.py           # 独立 XML 参数自由度策略工具
     ├── download.sh               # URL 列表的并行 wget 下载
     ├── fix-sedbin.py             # 依照 TS 固定 SED bin 的低显著性背景源
     ├── plot_sed.py               # 绘制 SED、PL/LogParabola 与近似误差带
@@ -192,6 +194,75 @@ fermiflow run -- \
 ```
 
 `bin-fit` 不会重复事件筛选、CCUBE 和曝光图计算，但会重新生成 source maps 和两次 gtlike。它会覆盖该 bin 目录中同名拟合产物；比较不同模型前应复制 XML 或保存结果目录。
+
+## 独立修改模型的自由参数
+
+`scripts/model_editor.py` 不依赖 Fermitools 或 Fermipy；它只读取一个 XML、按策略写出一个新的 XML。原输入模型保持不变。它支持三种策略：
+
+- `all`：该源所有谱与空间参数均放开；
+- `norm`：只放开谱归一化参数，其余参数固定；
+- `fixed`：该源所有参数固定。
+
+例如，把下面内容单独保存为 `configs/model_policy.yaml`。它不属于项目总 YAML。该例会将目标中心 3° 以内的源全部放开，3°--5° 的源只放开归一化，5° 外固定，同时使 Galactic 与 isotropic 背景只放开归一化：
+
+```yaml
+radial:
+  center: {ra: 237.083, dec: -53.8167}
+  zones:
+    - {max_radius: 3.0, policy: all}
+    - {max_radius: 5.0, policy: norm}
+  outside_policy: fixed
+background_norms: [gll_iem_v07, iso_P8R3_SOURCE_V3_v1]
+sources:
+  kes27: all
+```
+
+指定源的 `sources:` 规则优先级最高，因而可用于强制放开目标源或指定邻源；例如 `nearby_source: norm`。没有位置的背景源不会套用半径分区，只会由 `background_norms` 或 `sources` 控制。
+
+如果只想放开 Kes 27 的所有参数，以及银河/各向同性背景的归一化，而固定其它全部源，则用更短的版本：
+
+```yaml
+default_policy: fixed
+sources:
+  kes27: all
+background_norms: [gll_iem_v07, iso_P8R3_SOURCE_V3_v1]
+```
+
+单独生成模型时，把上面的内容保存为 `model_policy.yaml`，运行：
+
+```bash
+fermiflow model -- \
+  --input-model data/models/target_input.xml \
+  --policy model_policy.yaml \
+  --output-model data/models/target_freeing_input.xml
+```
+
+若不写 `--output-model`，会自动创建同目录的 `target_input_edited.xml`。也可以完全不另建 YAML，直接在终端设定同一规则：
+
+```bash
+fermiflow model -- \
+  --input-model data/models/target_input.xml \
+  --center-ra 237.083 --center-dec -53.8167 \
+  --free-all-within 3 --free-norm-until 5 \
+  --background-norm gll_iem_v07 \
+  --background-norm iso_P8R3_SOURCE_V3_v1 \
+  --source-policy kes27=all
+```
+
+如希望在拟合前临时调用同一个工具，而不改项目配置，则额外传入独立策略文件：
+
+```bash
+fermiflow run -- \
+  --config configs/g328_4_100MeV.yaml --mode like \
+  --input-model data/models/target_input.xml \
+  --model-policy configs/model_policy.yaml
+
+fermiflow spatial -- \
+  --config configs/spatial_g328_4.yaml \
+  --model-policy configs/model_policy.yaml
+```
+
+`fermiflow run` 会在原 XML 旁生成 `*_edited.xml`；`fermiflow spatial` 会把副本写入空间拟合输出目录的 `model_inputs/`，然后再开始分析。两者都不修改总 YAML 或原 XML。
 
 ## Fermipy 空间分析
 
