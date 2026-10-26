@@ -133,9 +133,15 @@ def apply_spatial_model_edit(fermipy_config, policy, outdir):
     for catalog in catalogs:
         catalog = Path(catalog)
         output_model = input_dir / default_output_path(catalog).name
-        _, free_parameters = apply_model_policy(catalog, output_model, policy)
+        _, original_free_parameters, free_parameters = apply_model_policy(
+            catalog, output_model, policy
+        )
         logger.info("Model policy applied: %s -> %s", catalog, output_model)
-        logger.info("Free parameters in edited model: %d", free_parameters)
+        logger.info(
+            "Free parameters in edited model: %d -> %d",
+            original_free_parameters,
+            free_parameters,
+        )
         edited_catalogs.append(str(output_model))
 
     fermipy_config["model"]["catalogs"] = edited_catalogs

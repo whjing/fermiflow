@@ -168,6 +168,7 @@ def apply_model_policy(input_model, output_model, config):
     output_model = Path(output_model).expanduser().resolve()
     tree = ET.parse(input_model)
     root = tree.getroot()
+    original_free_parameters = count_free_parameters(root)
     summary = []
     ts_filter = config.get("ts_filter", {})
     ts_values = (
@@ -184,7 +185,7 @@ def apply_model_policy(input_model, output_model, config):
     output_model.parent.mkdir(parents=True, exist_ok=True)
     ET.indent(tree, space="  ")
     tree.write(output_model, encoding="UTF-8", xml_declaration=True)
-    return summary, count_free_parameters(root)
+    return summary, original_free_parameters, count_free_parameters(root)
 
 
 def default_output_path(input_model):
@@ -281,10 +282,12 @@ def main():
     args = parse_args()
     policy = load_model_policy(args.policy) if args.policy else direct_policy(args)
     output_model = args.output_model or default_output_path(args.input_model)
-    _, free_parameters = apply_model_policy(args.input_model, output_model, policy)
+    _, original_free_parameters, free_parameters = apply_model_policy(
+        args.input_model, output_model, policy
+    )
     print(f"Input model : {args.input_model.expanduser().resolve()}")
     print(f"Output model: {output_model.expanduser().resolve()}")
-    print(f"Free parameters in output model: {free_parameters}")
+    print(f"Free parameters: {original_free_parameters} -> {free_parameters}")
 
 
 if __name__ == "__main__":
