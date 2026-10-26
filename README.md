@@ -44,8 +44,7 @@ python -m pip install . --no-deps --no-build-isolation
 
 ```bash
 conda activate fermi
-python -m pip install --upgrade --no-deps --no-build-isolation \
-  "git+https://github.com/whjing/fermiflow.git@main"
+python -m pip install --upgrade --no-deps --no-build-isolation "git+https://github.com/whjing/fermiflow.git@main"
 ```
 
 pip 只会临时获取 GitHub 源码并安装到当前 `fermi` 环境；它不会在你的 home 目录保留项目 checkout。
@@ -134,9 +133,7 @@ fermiflow run --config ../configs/g328_4_100MeV.yaml --mode MODE
 ### 建立全能段数据产品
 
 ```bash
-fermiflow run \
-  --config ../configs/g328_4_100MeV.yaml \
-  --mode prepare
+fermiflow run --config ../configs/g328_4_100MeV.yaml --mode prepare
 ```
 
 `prepare` 仅建立事件、曝光和目录模型产品；它不替代正式的似然拟合。
@@ -144,10 +141,7 @@ fermiflow run \
 ### 使用指定模型拟合全能段
 
 ```bash
-fermiflow run \
-  --config ../configs/g328_4_100MeV.yaml \
-  --mode like \
-  --input-model ../products_100MeV/model_input.xml
+fermiflow run --config ../configs/g328_4_100MeV.yaml --mode like --input-model ../products_100MeV/model_input.xml
 ```
 
 会依次执行 `gtsrcmaps`、`gtlike (DRMNFB)`、`gtlike (MINUIT)`，并生成 `*_srcmaps.fits`、`*_drmnfb.xml`、`*_minuit.xml` 与结果文件。
@@ -155,12 +149,7 @@ fermiflow run \
 ### 生成 TS map
 
 ```bash
-fermiflow run \
-  --config ../configs/g328_4_100MeV.yaml \
-  --mode tsmap \
-  --input-model ../products_100MeV/model_minuit.xml \
-  --size 5 \
-  --binsz 0.05
+fermiflow run --config ../configs/g328_4_100MeV.yaml --mode tsmap --input-model ../products_100MeV/model_minuit.xml --size 5 --binsz 0.05
 ```
 
 `size` 为图的边长（deg），`binsz` 为像素尺寸（deg）。一般使用收敛后的 `*_minuit.xml`。
@@ -168,11 +157,7 @@ fermiflow run \
 ### 首次分能段 SED 拟合
 
 ```bash
-fermiflow run \
-  --config ../configs/g328_4_100MeV.yaml \
-  --mode bin \
-  --nbins 6 \
-  --ibin 1
+fermiflow run --config ../configs/g328_4_100MeV.yaml --mode bin --nbins 6 --ibin 1
 ```
 
 `--ibin` 从 1 开始。首次 `bin` 要求 `ltcube`、`base_gti`、`sed_model` 均存在；分 bin 边界由 `emin`、`emax` 和 `nbins` 自动以对数间隔计算。
@@ -180,12 +165,7 @@ fermiflow run \
 ### 用改过的模型重跑已有 SED bin
 
 ```bash
-fermiflow run \
-  --config ../configs/g328_4_100MeV.yaml \
-  --mode bin-fit \
-  --nbins 6 \
-  --ibin 6 \
-  --input-model /absolute/path/my_target_sed_6bin06-mod_input.xml
+fermiflow run --config ../configs/g328_4_100MeV.yaml --mode bin-fit --nbins 6 --ibin 6 --input-model /absolute/path/my_target_sed_6bin06-mod_input.xml
 ```
 
 `bin-fit` 不会重复事件筛选、CCUBE 和曝光图计算，但会重新生成 source maps 和两次 gtlike。它会覆盖该 bin 目录中同名拟合产物；比较不同模型前应复制 XML 或保存结果目录。
@@ -238,35 +218,21 @@ ts_filter:
 单独生成模型时，把上面的内容保存为 `model_policy.yaml`，运行：
 
 ```bash
-fermiflow model -- \
-  --input-model ../data/models/target_input.xml \
-  --policy ../configs/model_policy.yaml \
-  --output-model ../data/models/target_freeing_input.xml
+fermiflow model -- --input-model ../data/models/target_input.xml --policy ../configs/model_policy.yaml --output-model ../data/models/target_freeing_input.xml
 ```
 
 若不写 `--output-model`，会自动创建同目录的 `target_input_edited.xml`。也可以完全不另建 YAML，直接在终端设定同一规则：
 
 ```bash
-fermiflow model -- \
-  --input-model ../data/models/target_input.xml \
-  --free-spectral-within 3 --free-norm-until 5 \
-  --ts-results ../products_1GeV/target_minuit_results.dat --ts-threshold 1 \
-  --background-norm gll_iem_v07 \
-  --background-norm iso_P8R3_SOURCE_V3_v1 \
-  --source-policy kes27=spectral
+fermiflow model -- --input-model ../data/models/target_input.xml --free-spectral-within 3 --free-norm-until 5 --ts-results ../products_1GeV/target_minuit_results.dat --ts-threshold 1 --background-norm gll_iem_v07 --background-norm iso_P8R3_SOURCE_V3_v1 --source-policy kes27=spectral
 ```
 
 如希望在拟合前临时调用同一个工具，而不改项目配置，则额外传入独立策略文件：
 
 ```bash
-fermiflow run -- \
-  --config ../configs/g328_4_100MeV.yaml --mode like \
-  --input-model ../data/models/target_input.xml \
-  --model-policy ../configs/model_policy.yaml
+fermiflow run -- --config ../configs/g328_4_100MeV.yaml --mode like --input-model ../data/models/target_input.xml --model-policy ../configs/model_policy.yaml
 
-fermiflow spatial -- \
-  --config ../configs/spatial_g328_4.yaml \
-  --model-policy ../configs/model_policy.yaml
+fermiflow spatial -- --config ../configs/spatial_g328_4.yaml --model-policy ../configs/model_policy.yaml
 ```
 
 `fermiflow run` 会在原 XML 旁生成 `*_edited.xml`；`fermiflow spatial` 会把副本写入空间拟合输出目录的 `model_inputs/`，然后再开始分析。两者都不修改总 YAML 或原 XML。
