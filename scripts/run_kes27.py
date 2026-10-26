@@ -111,12 +111,6 @@ def edited_model(project, input_model, model_policy):
         return input_model
 
     policy = dict(model_policy)
-    radial = policy.get("radial")
-    if radial and "center" not in radial:
-        radial = dict(radial)
-        radial["center"] = {"ra": project["ra"], "dec": project["dec"]}
-        policy["radial"] = radial
-
     output_model = default_output_path(input_model)
     summary = apply_model_policy(input_model, output_model, policy)
     logger.info("Model policy applied: %s -> %s", input_model, output_model)

@@ -207,7 +207,8 @@ fermiflow run -- \
 
 ```yaml
 radial:
-  center: {ra: 237.083, dec: -53.8167}
+  # Uses each source's ROI_Center_Distance attribute (deg).
+  # Add center: {ra: ..., dec: ...} only for a different center.
   zones:
     - {max_radius: 3.0, policy: all}
     - {max_radius: 5.0, policy: norm}
@@ -242,7 +243,6 @@ fermiflow model -- \
 ```bash
 fermiflow model -- \
   --input-model data/models/target_input.xml \
-  --center-ra 237.083 --center-dec -53.8167 \
   --free-all-within 3 --free-norm-until 5 \
   --background-norm gll_iem_v07 \
   --background-norm iso_P8R3_SOURCE_V3_v1 \

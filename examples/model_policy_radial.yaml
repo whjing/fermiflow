@@ -3,10 +3,8 @@
 # Or:       fermiflow run -- --config project.yaml --mode like --input-model MODEL.xml --model-policy model_policy_radial.yaml
 
 radial:
-  # Omit center when called through `fermiflow run` or `fermiflow spatial`:
-  # their analysis center is supplied automatically.  Keep it here for
-  # completely standalone use of `fermiflow model`.
-  center: {ra: 237.083, dec: -53.8167}
+  # With no center here, the XML attribute ROI_Center_Distance is used.
+  # Add center: {ra: ..., dec: ...} only to use a different center.
   zones:
     - {max_radius: 3.0, policy: all}
     - {max_radius: 5.0, policy: norm}

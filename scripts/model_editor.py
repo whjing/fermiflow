@@ -39,6 +39,27 @@ def source_position(source):
     if spatial is None:
         return None
 
+
+def source_distance_deg(source, radial):
+    """Return distance from the requested center, in degrees.
+
+    Catalog XMLs created for an ROI normally carry ``ROI_Center_Distance``.
+    That value is preferred when no alternative center was requested.
+    """
+    center = radial.get("center")
+    if center is not None:
+        position = source_position(source)
+        if position is None:
+            return None
+        return angular_separation_deg(
+            position[0], position[1], center["ra"], center["dec"]
+        )
+
+    try:
+        return float(source.get("ROI_Center_Distance"))
+    except (TypeError, ValueError):
+        return None
+
     parameters = {item.get("name", "").upper(): item for item in spatial.findall("parameter")}
     try:
         return float(parameters["RA"].get("value")), float(parameters["DEC"].get("value"))
@@ -87,10 +108,8 @@ def policy_for_source(source, config):
 
     radial = config.get("radial")
     if radial:
-        position = source_position(source)
-        if position is not None:
-            center = radial["center"]
-            distance = angular_separation_deg(position[0], position[1], center["ra"], center["dec"])
+        distance = source_distance_deg(source, radial)
+        if distance is not None:
             for zone in radial.get("zones", []):
                 if distance <= float(zone["max_radius"]):
                     return zone["policy"]
@@ -149,18 +168,22 @@ def direct_policy(args):
         policy["sources"] = source_rules
 
     if args.free_all_within is not None or args.free_norm_until is not None:
-        if args.center_ra is None or args.center_dec is None:
-            raise SystemExit("Radial terminal rules require --center-ra and --center-dec.")
         zones = []
         if args.free_all_within is not None:
             zones.append({"max_radius": args.free_all_within, "policy": "all"})
         if args.free_norm_until is not None:
             zones.append({"max_radius": args.free_norm_until, "policy": "norm"})
         policy["radial"] = {
-            "center": {"ra": args.center_ra, "dec": args.center_dec},
             "zones": zones,
             "outside_policy": args.outside_policy,
         }
+        if args.center_ra is not None or args.center_dec is not None:
+            if args.center_ra is None or args.center_dec is None:
+                raise SystemExit("Use both --center-ra and --center-dec, or neither.")
+            policy["radial"]["center"] = {
+                "ra": args.center_ra,
+                "dec": args.center_dec,
+            }
     return policy
 
 
@@ -169,8 +192,8 @@ def parse_args():
     parser.add_argument("--input-model", type=Path, required=True)
     parser.add_argument("--policy", type=Path, help="Standalone YAML policy file.")
     parser.add_argument("--output-model", type=Path)
-    parser.add_argument("--center-ra", type=float, help="Radial-policy center RA in degrees.")
-    parser.add_argument("--center-dec", type=float, help="Radial-policy center Dec in degrees.")
+    parser.add_argument("--center-ra", type=float, help="Optional non-ROI radial center RA in degrees.")
+    parser.add_argument("--center-dec", type=float, help="Optional non-ROI radial center Dec in degrees.")
     parser.add_argument("--free-all-within", type=float, help="Free all parameters inside this radius (deg).")
     parser.add_argument("--free-norm-until", type=float, help="Free only normalization from the inner radius to this radius (deg).")
     parser.add_argument("--outside-policy", choices=("all", "norm", "fixed"), default="fixed")

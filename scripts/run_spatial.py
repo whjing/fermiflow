@@ -127,16 +127,6 @@ def apply_spatial_model_edit(fermipy_config, policy, outdir):
         return fermipy_config
 
     policy = copy.deepcopy(policy)
-    radial = policy.get("radial")
-    if radial and "center" not in radial:
-        radial = dict(radial)
-        selection = fermipy_config.get("selection", {})
-        radial["center"] = {
-            "ra": selection["ra"],
-            "dec": selection["dec"],
-        }
-        policy["radial"] = radial
-
     input_dir = outdir / "model_inputs"
     catalogs = fermipy_config.get("model", {}).get("catalogs", [])
     edited_catalogs = []
