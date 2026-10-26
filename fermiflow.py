@@ -172,6 +172,66 @@ sources:
     print(f"Created sample spatial configuration: {path}")
 
 
+def write_sample_spatial_grid_config(path: Path, target: str, energy_label: str) -> None:
+    """Write a non-destructive template for a spatial-model hypothesis grid."""
+    if path.exists():
+        raise SystemExit(f"Refusing to overwrite existing file: {path}")
+
+    analysis_name = f"{target}_{energy_label}"
+    sample = f"""# Generate XML, Fermipy YAML, and Slurm scripts for spatial hypotheses.
+# Paths are resolved relative to this file in configs/.
+base:
+  input_model: ../products_{energy_label}/{analysis_name}_input.xml
+  spatial_template: ../configs/spatial_{target}_{energy_label}.yaml
+  output_root: ../products_{energy_label}/spatial_grid
+  # model_policy: ../configs/modify-model.yaml
+
+# Every present source contributes '<full-source-name>-<model>' to the tag.
+# A source omitted by include: false is absent from the XML and the tag.
+sources:
+  - name: {target}
+    include: [true]
+    models: [point, gaussian, disk]
+    # With no ra/dec here, template XML coordinates are retained.  r68 is
+    # required only when an extended model cannot inherit a radial width.
+    seed:
+      r68: 0.33     # deg; converted automatically for Gaussian or Disk
+
+  - name: extend
+    include: [true]
+    models: [gaussian, disk]
+    seed: from_input_model
+
+  - name: pt
+    include: [true, false]
+    models: [point]
+
+# The generator only writes .sbatch files.  Run submit_spatial_grid.sh yourself.
+slurm:
+  conda_env: fermi
+  conda_sh: /share/home/whjing/miniforge3/etc/profile.d/conda.sh
+  working_dir: ../scripts
+  nodes: [c001, c002, c003, c004, c005]
+  sbatch_dir: ../sbatch/spatial_grid
+  log_dir: ../logs/spatial_grid
+
+# Optional visual check after jobs finish.  Leave this entire block commented
+# if no common TS map is available; grid generation is unaffected.
+# plot:
+#   tsmap: ../products_{energy_label}/{analysis_name}_tsmap.fits
+#   radio_contours: ../data/regions/{target}-radio.ctr
+#   output: ../figures/{target}_spatial_grid.png
+#   ncols: 4
+#   cmap: inferno
+#   power_gamma: 0.5
+#   vmin: -1.0
+#   vmax_percentile: 99.99
+"""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(sample, encoding="utf-8")
+    print(f"Created sample spatial-grid configuration: {path}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="fermiflow",
@@ -190,10 +250,19 @@ def main() -> None:
     spatial_init.add_argument("config", nargs="?", type=Path, default=Path("spatial.yaml"))
     spatial_init.add_argument("--target", default="my_target")
     spatial_init.add_argument("--energy-label", default="2GeV")
+    spatial_grid_init = subparsers.add_parser(
+        "init-spatial-grid", help="Create a sample spatial-model grid YAML file."
+    )
+    spatial_grid_init.add_argument(
+        "config", nargs="?", type=Path, default=Path("spatial_grid.yaml")
+    )
+    spatial_grid_init.add_argument("--target", default="my_target")
+    spatial_grid_init.add_argument("--energy-label", default="2GeV")
     # Workflow-specific options are deliberately not duplicated here.  They
     # are collected below and passed straight to their implementing script.
     subparsers.add_parser("run", help="Run the Fermitools workflow.")
     subparsers.add_parser("spatial", help="Run the Fermipy spatial workflow.")
+    subparsers.add_parser("spatial-grid", help="Generate or plot a grid of spatial hypotheses.")
     subparsers.add_parser("download", help="Download URLs in parallel with wget.")
     subparsers.add_parser("model", help="Create an XML with a parameter-freeing policy.")
 
@@ -201,7 +270,7 @@ def main() -> None:
     # ``fermiflow spatial --config ...`` as well as the older ``-- --config``
     # form, without teaching this lightweight wrapper every workflow option.
     args, forwarded_args = parser.parse_known_args()
-    if args.command in {"path", "init", "init-spatial"} and forwarded_args:
+    if args.command in {"path", "init", "init-spatial", "init-spatial-grid"} and forwarded_args:
         parser.error("unrecognized arguments: " + " ".join(forwarded_args))
 
     if args.command == "path":
@@ -218,9 +287,16 @@ def main() -> None:
         )
         return
 
+    if args.command == "init-spatial-grid":
+        write_sample_spatial_grid_config(
+            args.config.expanduser().resolve(), args.target, args.energy_label
+        )
+        return
+
     script_name = {
         "run": "run_kes27.py",
         "spatial": "run_spatial.py",
+        "spatial-grid": "spatial_grid.py",
         "download": "download.sh",
         "model": "model_editor.py",
     }[args.command]

@@ -16,6 +16,7 @@ fermiflow/
     ├── run_kes27.py              # Fermitools 主流程
     ├── fermi_target.py           # Fermitools 各个处理步骤
     ├── run_spatial.py            # Fermipy 定位与延展拟合
+    ├── spatial_grid.py           # 批量空间假设、Slurm 脚本与可选图像检查
     ├── utils.py                  # 日志与路径公共函数
     ├── model_editor.py           # 独立 XML 参数自由度策略工具
     ├── download.sh               # URL 列表的并行 wget 下载
@@ -263,6 +264,107 @@ sources:
 ```
 
 该流程写出最终 ROI XML 与 DS9 region。正式报告 `TS_ext` 时，点源与延展模型应各自独立定位并重新优化背景，不能把点源中心固定到延展模型中心后直接作显著性结论。
+
+### 批量生成空间模型组合
+
+当需要系统比较多个源的 Point/Gaussian/Disk 模板，以及可选邻近点源是否存在时，使用独立的空间组合配置。先生成模板：
+
+```bash
+fermiflow init-spatial-grid ../configs/spatial_grid.yaml --target kes27 --energy-label 1GeV
+```
+
+这个 YAML 与单个 `spatial_*.yaml` 分工不同：它不直接运行 Fermipy，而是从一个含全部候选源的基础 XML，生成每个空间假设独立的 XML、单模型空间 YAML、`.sbatch` 文件和 manifest。典型配置如下：
+
+```yaml
+base:
+  input_model: ../products_1GeV/kes27_model-tem_input.xml
+  spatial_template: ../configs/spatial_kes27_1GeV.yaml
+  output_root: ../products_1GeV/spatial_grid
+  # model_policy: ../configs/modify-model.yaml
+
+sources:
+  - name: kes27
+    include: [true]
+    models: [point, gaussian, disk]
+    seed:
+      ra: 237.124685
+      dec: -53.921295
+      r68: 0.33
+
+  - name: extend
+    include: [true]
+    models: [gaussian, disk]
+    seed: from_input_model
+
+  - name: pt
+    include: [true, false]
+    models: [point]
+```
+
+`name` 必须严格对应基础 XML 内的源名。`include: [true]` 表示该源始终保留；`include: [true, false]` 会生成“保留”和“完全移除”两类 XML。被移除的源不会出现在文件名中。
+
+生成器使用完整源名，并以 `point`、`gaussian`、`disk` 表示空间模型。例如：
+
+```text
+kes27-gaussian-extend-disk-pt-point
+kes27-gaussian-extend-disk
+```
+
+第二个组合没有 `pt`，因此不会出现 `pt-absent` 之类的占位名称。包含空格的正式源名在 XML 和 manifest 中保持不变；只在文件路径中把空格替换为连字符。
+
+对任意源，省略 `seed:` 时会沿用基础 XML 的 RA/DEC；指定 `seed.ra` 或 `seed.dec` 时只替换给出的坐标分量。对延展模型，`seed.r68` 是 68% 包含半径（deg）：工具会自动写入 Gaussian 的 \(\sigma=r_{68}/1.5096\) 或 Disk 的 \(R=r_{68}/\sqrt{0.68}\)。若基础 XML 是点源、而该组合要求 Gaussian/Disk，则必须提供 `seed.r68`，因为点源本身没有可继承的延展尺度。
+
+生成组合、模型和任务脚本：
+
+```bash
+fermiflow spatial-grid --config ../configs/spatial_grid.yaml
+```
+
+该命令**不会提交任务**。它会写出：
+
+```text
+products_1GeV/spatial_grid/
+├── models/<tag>_input.xml
+├── configs/spatial_<tag>.yaml
+├── <tag>/                         # 每个组合的 Fermipy 输出目录
+└── spatial_grid_manifest.csv
+
+sbatch/spatial_grid/
+├── <tag>.sbatch
+└── submit_spatial_grid.sh
+```
+
+检查生成的 XML 和 `.sbatch` 后，再手动提交：
+
+```bash
+bash ../sbatch/spatial_grid/submit_spatial_grid.sh
+```
+
+`spatial_grid_manifest.csv` 保留 tag、每个源实际使用的模型、XML、单模型 YAML、输出目录、region 文件和 sbatch 文件路径。后续比较 likelihood、TS、定位结果和延展半径时，应从该表读取组合信息，而不是依赖文件名猜测模型。
+
+### 可选：用同一 TS map 检查所有空间结果
+
+空间组合 YAML 可选加入绘图块；不写该块或不设置 `tsmap` 不影响 XML/YAML/sbatch 的正常生成。
+
+```yaml
+plot:
+  tsmap: ../products_1GeV/kes27_best_tsmap.fits
+  radio_contours: ../data/regions/kes27-radio.ctr
+  output: ../figures/kes27_spatial_grid.png
+  ncols: 4
+  cmap: inferno
+  power_gamma: 0.5
+  vmin: -1.0
+  vmax_percentile: 99.99
+```
+
+所有空间任务完成后运行：
+
+```bash
+fermiflow spatial-grid --config ../configs/spatial_grid.yaml --plot
+```
+
+绘图器从 manifest 查找已存在的最终 `.reg` 文件，以同一张 TS map 画成子图；可选叠加 `.ctr` 射电等高线。最终 region 图中，延展源的实线圆是空间模板的 \(r_{68}\)，点源的虚线圆是定位误差 `pos_r68`，两者不可作相同的物理解释。
 
 ## 用链接文本多核下载 Fermi 数据
 
