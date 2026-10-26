@@ -6,7 +6,6 @@ import numpy as np
 import subprocess
 import logging
 from glob import glob
-from regions import Regions
 import xml.etree.ElementTree as ET
 
 import pyLikelihood
@@ -290,13 +289,94 @@ class FermiTarget:
         os.system(f"wget -c {url} -P {self.dir_rawdata}")
         print(f"[DONE] Model file download finished.\n")
 
-    def convert_ds9_to_carta(self, file_ds9, file_carta):
-        """示例：将 DS9 区域文件转换为 CARTA 格式（如果需要）"""
-    
-        regs = Regions.read(file_ds9, format="ds9")
-        regs.write(file_carta, format="ds9", overwrite=True)
+    @staticmethod
+    def _xml_parameter_value(parameters, name):
+        """Return the physical XML parameter value, including its scale."""
+        parameter = parameters.get(name)
+        if parameter is None:
+            return None
 
-        print(f"[DONE] Converted DS9 region file '{file_ds9}' to CARTA format '{file_carta}'.")
+        try:
+            return float(parameter.get("value")) * float(parameter.get("scale", "1"))
+        except (TypeError, ValueError):
+            return None
+
+    def write_carta_regions_from_model(self, model_file, region_file):
+        """Write one CARTA-compatible region file using the XML spatial models.
+
+        Point sources are shown by a centre cross.  Radial Gaussian and disk
+        sources are shown by a centre cross plus a circle whose radius is the
+        corresponding containment radius r68.  Diffuse backgrounds and spatial
+        templates without a circular parameterisation are intentionally skipped:
+        drawing a circle for them would be physically misleading.
+        """
+        root = ET.parse(model_file).getroot()
+        lines = [
+            "# Region file format: DS9 version 4.1",
+            "global color=cyan width=1 font=\"helvetica 10 normal\"",
+            "fk5",
+        ]
+        point_count = 0
+        extended_count = 0
+        skipped = []
+
+        for source in root.findall("source"):
+            spatial_model = source.find("spatialModel")
+            if spatial_model is None:
+                continue
+
+            parameters = {
+                parameter.get("name"): parameter
+                for parameter in spatial_model.findall("parameter")
+            }
+            ra = self._xml_parameter_value(parameters, "RA")
+            dec = self._xml_parameter_value(parameters, "DEC")
+            source_name = source.get("name", "unnamed").replace("{", "(").replace("}", ")")
+            model_type = spatial_model.get("type", "")
+
+            # Galactic/isotropic diffuse components and map templates generally
+            # have no single sky position, so they cannot be represented by a
+            # meaningful circular region.
+            if ra is None or dec is None:
+                if model_type not in {"SkyDirFunction", "PointSource"}:
+                    skipped.append(f"{source_name} ({model_type or 'unknown spatial model'})")
+                continue
+
+            if model_type in {"SkyDirFunction", "PointSource"}:
+                lines.append(f"point({ra:.8f},{dec:.8f}) # point=cross text={{{source_name}}}")
+                point_count += 1
+                continue
+
+            if model_type == "RadialGaussian":
+                sigma = self._xml_parameter_value(parameters, "Sigma")
+                r68 = None if sigma is None else sigma * np.sqrt(-2.0 * np.log(1.0 - 0.68))
+            elif model_type == "RadialDisk":
+                radius = self._xml_parameter_value(parameters, "Radius")
+                r68 = None if radius is None else radius * np.sqrt(0.68)
+            else:
+                r68 = None
+
+            if r68 is None or r68 <= 0:
+                skipped.append(f"{source_name} ({model_type or 'unknown spatial model'})")
+                continue
+
+            lines.append(f"point({ra:.8f},{dec:.8f}) # point=cross text={{{source_name}}}")
+            lines.append(f"circle({ra:.8f},{dec:.8f},{r68:.8f}d) # text={{{source_name} r68}}")
+            extended_count += 1
+
+        with open(region_file, "w", encoding="utf-8") as handle:
+            handle.write("\n".join(lines) + "\n")
+
+        print(
+            f"[DONE] CARTA region file written: {region_file} "
+            f"({point_count} point, {extended_count} extended sources)."
+        )
+        if skipped:
+            logger.info(
+                "Skipped %d source(s) without a circular sky model: %s",
+                len(skipped),
+                "; ".join(skipped),
+            )
 
     def run_make4FGLxml(
         self,
@@ -316,16 +396,12 @@ class FermiTarget:
             output_name=self.path_model_input,  # 生成的 XML 模型文件路径
             DR=DR,
         )
-        # --- 核心修改：安全地拆分路径和文件名 ---
+        # Generate one CARTA-compatible region file directly from the finished
+        # XML.  LATSourceModel's built-in region output treats all catalogue
+        # sources as points, so it is unsuitable for extended-source work.
         model_dir = os.path.dirname(self.path_model_input)
         model_name = os.path.basename(self.path_model_input)
-
-        # 安全拼接 DS9 和 CARTA 的文件名
-        ds9_name = f"ROI_{model_name.replace('.xml', '.reg')}"
         carta_name = f"ROI_{model_name.replace('.xml', '_carta.reg')}"
-
-        # 重新和目录组合成绝对安全的完整路径
-        file_ds9 = os.path.join(model_dir, ds9_name)
         file_carta = os.path.join(model_dir, carta_name)
 
         source_list.make_model(
@@ -335,11 +411,13 @@ class FermiTarget:
             max_free_radius=max_free_radius,
             sigma_to_free=sigma_to_free,
             variable_free=variable_free,
-            region_file=file_ds9,
             galactic_index_free=False,  # new
         )
 
-        self.convert_ds9_to_carta(file_ds9=file_ds9, file_carta=file_carta)
+        self.write_carta_regions_from_model(
+            model_file=self.path_model_input,
+            region_file=file_carta,
+        )
         print(f"[{self.name}] [DONE] 4FGL XML model generated: {self.path_model_input}\n")
 
     def check_free_params(self, max_free=70):

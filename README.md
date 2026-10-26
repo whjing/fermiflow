@@ -112,7 +112,7 @@ my_project/
 ├── data/
 │   ├── my_target_ltcube.fits # 可跨本项目复用的 livetime cube
 │   ├── models/               # 固定输入 XML、空间模板
-│   └── regions/              # DS9 region 文件
+│   └── regions/              # CARTA-compatible region 文件
 ├── rawdata/                  # 下载的 photon / spacecraft FITS
 ├── products_100MeV/          # 可再生的 Fermitools 产物
 ├── logs/
@@ -269,7 +269,7 @@ sources:
       nstep: 20
 ```
 
-该流程写出最终 ROI XML 与 DS9 region。正式报告 `TS_ext` 时，点源与延展模型应各自独立定位并重新优化背景，不能把点源中心固定到延展模型中心后直接作显著性结论。
+该流程写出最终 ROI XML 与 CARTA-compatible region。由 `prepare` 自动生成的 catalogue region 也会直接从输出 XML 读取空间模型：点源画中心十字，`RadialGaussian` 与 `RadialDisk` 画中心十字和换算后的 \(r_{68}\) 圆。银河/各向同性背景及没有圆对称参数的空间模板不会被伪装成圆形 region。正式报告 `TS_ext` 时，点源与延展模型应各自独立定位并重新优化背景，不能把点源中心固定到延展模型中心后直接作显著性结论。
 
 ### 批量生成空间模型组合
 
