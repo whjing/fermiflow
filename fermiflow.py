@@ -190,20 +190,20 @@ def main() -> None:
     spatial_init.add_argument("config", nargs="?", type=Path, default=Path("spatial.yaml"))
     spatial_init.add_argument("--target", default="my_target")
     spatial_init.add_argument("--energy-label", default="2GeV")
-    subparsers.add_parser("run", help="Run the Fermitools workflow.").add_argument(
-        "args", nargs=argparse.REMAINDER, help="Arguments passed to scripts/run_kes27.py."
-    )
-    subparsers.add_parser("spatial", help="Run the Fermipy spatial workflow.").add_argument(
-        "args", nargs=argparse.REMAINDER, help="Arguments passed to scripts/run_spatial.py."
-    )
-    subparsers.add_parser("download", help="Download URLs in parallel with wget.").add_argument(
-        "args", nargs=argparse.REMAINDER, help="Arguments passed to scripts/download.sh."
-    )
-    subparsers.add_parser("model", help="Create an XML with a parameter-freeing policy.").add_argument(
-        "args", nargs=argparse.REMAINDER, help="Arguments passed to scripts/model_editor.py."
-    )
+    # Workflow-specific options are deliberately not duplicated here.  They
+    # are collected below and passed straight to their implementing script.
+    subparsers.add_parser("run", help="Run the Fermitools workflow.")
+    subparsers.add_parser("spatial", help="Run the Fermipy spatial workflow.")
+    subparsers.add_parser("download", help="Download URLs in parallel with wget.")
+    subparsers.add_parser("model", help="Create an XML with a parameter-freeing policy.")
 
-    args = parser.parse_args()
+    # Forward unknown options to the selected workflow.  This lets users write
+    # ``fermiflow spatial --config ...`` as well as the older ``-- --config``
+    # form, without teaching this lightweight wrapper every workflow option.
+    args, forwarded_args = parser.parse_known_args()
+    if args.command in {"path", "init", "init-spatial"} and forwarded_args:
+        parser.error("unrecognized arguments: " + " ".join(forwarded_args))
+
     if args.command == "path":
         print(script_directory().parent)
         return
@@ -224,7 +224,7 @@ def main() -> None:
         "download": "download.sh",
         "model": "model_editor.py",
     }[args.command]
-    raise SystemExit(run_script(script_name, args.args))
+    raise SystemExit(run_script(script_name, forwarded_args))
 
 
 if __name__ == "__main__":
