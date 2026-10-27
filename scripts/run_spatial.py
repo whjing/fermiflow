@@ -54,7 +54,12 @@ def write_ds9_regions(
     localization_results=None,
     extension_results=None,
 ):
-    """Write fitted centers, extended-source r68, and point localization r68."""
+    """Write fitted centres plus unlabelled containment circles.
+
+    Extended sources retain their fitted r68 circle.  Point sources retain a
+    dashed localisation-r68 circle.  In both cases the source name appears
+    only beside the central cross, so region overlays stay readable.
+    """
     localization_results = localization_results or {}
     extension_results = extension_results or {}
 
@@ -89,7 +94,7 @@ def write_ds9_regions(
                 if pos_r68 is not None:
                     handle.write(
                         f"circle({ra:.6f},{dec:.6f},{pos_r68:.6f}d) "
-                        f"# color=yellow dash=1 text={{{source_name} pos_r68={pos_r68:.4f} deg}}\n"
+                        "# color=yellow dash=1\n"
                     )
                 else:
                     logger.warning(
@@ -108,7 +113,7 @@ def write_ds9_regions(
                 else:
                     handle.write(
                         f"circle({ra:.6f},{dec:.6f},{r68:.6f}d) "
-                        f"# color=cyan text={{{source_name} r68={r68:.4f} deg}}\n"
+                        "# color=cyan\n"
                     )
 
             handle.write(

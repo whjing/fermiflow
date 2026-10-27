@@ -850,7 +850,7 @@ def plot_grid(config_path):
         from astropy.io import fits
         from astropy.wcs import WCS
         from matplotlib.colors import PowerNorm
-        from regions import CircleSkyRegion, Regions
+        from regions import PointSkyRegion, Regions
     except ImportError as error:
         raise SystemExit(
             "Plotting needs matplotlib, astropy, and regions in the active environment."
@@ -916,7 +916,7 @@ def plot_grid(config_path):
                 )
         for region in Regions.read(row["region_file"], format="ds9"):
             axis.add_artist(region.to_pixel(wcs).as_artist(linewidth=1.5))
-            if isinstance(region, CircleSkyRegion):
+            if isinstance(region, PointSkyRegion):
                 text = region_label(region)
                 if text:
                     axis.text(
