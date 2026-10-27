@@ -18,8 +18,15 @@ background_norms: [gll_iem_v07, iso_P8R3_SOURCE_V3_v1]
 #   my_target: spectral
 #   nearby_source: norm
 
-# Optional: fix faint sources using a previous gtlike *_results.dat file.
+# Optional: apply a separate radial policy only to faint sources from a
+# previous gtlike *_results.dat file.  If ``radial.center`` is set above, this
+# block inherits it unless it supplies its own center.
 # ts_filter:
 #   results_file: ../products_1GeV/my_target_minuit_results.dat
-#   threshold: 1.0
+#   threshold: 25.0
+#   radial:
+#     zones:
+#       - {max_radius: 5.0, policy: norm}
+#     outside_policy: fixed
+#   # Used only if ts_filter.radial is omitted.
 #   policy: fixed

@@ -72,6 +72,22 @@ def source_distance_deg(source, radial):
     except (TypeError, ValueError):
         return None
 
+
+def policy_from_radial(source, radial):
+    """Resolve a radial-zone policy, or return ``None`` without a position."""
+    if not radial:
+        return None
+
+    distance = source_distance_deg(source, radial)
+    if distance is None:
+        return None
+
+    for zone in radial.get("zones", []):
+        if distance <= float(zone["max_radius"]):
+            return zone["policy"]
+    return radial.get("outside_policy", "fixed")
+
+
 def set_source_policy(source, policy):
     """Set one source's spectral freedom and return the number of changes.
 
@@ -119,18 +135,25 @@ def policy_for_source(source, config, ts_values):
     if name in background_norms:
         return "norm"
 
+    radial = config.get("radial")
     ts_filter = config.get("ts_filter", {})
     if name in ts_values and ts_values[name] < float(ts_filter.get("threshold", 0)):
+        ts_radial = ts_filter.get("radial")
+        if ts_radial:
+            # A low-TS rule normally uses the analysis centre already given by
+            # the main radial policy.  It may still override that centre when
+            # a different one is explicitly supplied under ts_filter.radial.
+            ts_radial = dict(ts_radial)
+            if "center" not in ts_radial and radial and radial.get("center"):
+                ts_radial["center"] = radial["center"]
+            policy = policy_from_radial(source, ts_radial)
+            if policy is not None:
+                return policy
         return ts_filter.get("policy", "fixed")
 
-    radial = config.get("radial")
-    if radial:
-        distance = source_distance_deg(source, radial)
-        if distance is not None:
-            for zone in radial.get("zones", []):
-                if distance <= float(zone["max_radius"]):
-                    return zone["policy"]
-            return radial.get("outside_policy", "fixed")
+    policy = policy_from_radial(source, radial)
+    if policy is not None:
+        return policy
 
     return config.get("default_policy", "fixed")
 

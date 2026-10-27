@@ -92,8 +92,8 @@ data/
 生成 XML 时，流水线会额外写出一个 CARTA 可直接读入的 `.reg` 文件。它从 XML 的 `spatialModel` 读取信息：
 
 - `SkyDirFunction` 点源：中心十字；
-- `RadialGaussian`：中心十字与 \(r_{68}=1.5096\sigma\) 圆；
-- `RadialDisk`：中心十字与 \(r_{68}=\sqrt{0.68}R\) 圆；
+- `RadialGaussian`：中心十字与 $r_{68}=1.5096\sigma$ 圆；
+- `RadialDisk`：中心十字与 $r_{68}=\sqrt{0.68}R$ 圆；
 - Galactic/isotropic diffuse 与 `SpatialMap` 等没有圆对称尺度的源：跳过，不强行画成圆。
 
 这份 region 适合检查 catalogue 初始模型，不能替代后续重新定位得到的空间结果。
@@ -134,7 +134,20 @@ sources:
 
 含义是：目标源和近处显著邻源可重拟合谱；较远源只改变归一化；更远源固定；银河与各向同性背景只改变归一化。这样既保留足够的背景弹性，也避免大量低显著性源造成不稳定拟合。
 
-如果已有一次 `gtlike` 的 `*_results.dat`，可加入 `ts_filter`，将低 TS 源先固定再重跑。它应仅作为减少自由度的稳定化措施；目标源和两个 diffuse backgrounds 应通过 `sources:` 与 `background_norms:` 显式保护。
+如果已有一次 `gtlike` 的 `*_results.dat`，可加入 `ts_filter`，按低 TS 源的专用半径策略减少自由度。例如，下面规则只对 \(TS<25\) 的源生效：中心 5° 内只放开归一化，5° 外固定；高 TS 源仍使用上面的主 `radial` 分区。
+
+```yaml
+ts_filter:
+  results_file: ../products_1GeV/my_target_baseline_minuit_results.dat
+  threshold: 25.0
+  radial:
+    zones:
+      - {max_radius: 5.0, policy: norm}
+    outside_policy: fixed
+  policy: fixed
+```
+
+若主 `radial` 已定义 `center`，`ts_filter.radial` 自动继承该中心；也可在其内部单独指定 `center`。目标源和两个 diffuse backgrounds 应通过 `sources:` 与 `background_norms:` 显式保护，避免低 TS 筛选将其固定。
 
 ---
 
@@ -264,15 +277,15 @@ fermiflow spatial-grid --config ../configs/spatial_grid.yaml --compare-likelihoo
 
 比较量为：
 
-\[
+$$
 \Delta TS_i = 2\left[(-\log L)_i - (-\log L)_{\rm best}\right].
-\]
+$$
 
-数值越小的 \(-\log L\) 对应越好的拟合。对于“有/无某个可选源”的一对嵌套模型：
+数值越小的 $-\log L$ 对应越好的拟合。对于“有/无某个可选源”的一对嵌套模型：
 
-\[
+$$
 TS_{\rm source}=2\left[(-\log L)_{\rm absent}-(-\log L)_{\rm present}\right].
-\]
+$$
 
 只有在模型严格嵌套、其它设置一致且没有参数压在边界时，才适合把该 TS 直接按常见显著性近似解释。Gaussian 与 Disk 等非嵌套模板更适合作 likelihood/AIC 等模型选择比较，而不是简单当作一个自由度的 TS。
 
@@ -289,15 +302,15 @@ TS_{\rm source}=2\left[(-\log L)_{\rm absent}-(-\log L)_{\rm present}\right].
 
 谱型定义为：
 
-\[
+$$
 \frac{dN}{dE}=N_0\left(\frac{E}{E_0}\right)^{-\Gamma}
 \qquad \text{(PowerLaw)},
-\]
+$$
 
-\[
+$$
 \frac{dN}{dE}=N_0\left(\frac{E}{E_b}\right)^{-\left[\alpha+\beta\log(E/E_b)\right]}
 \qquad \text{(LogParabola)}.
-\]
+$$
 
 先复制全能段最佳空间模型，分别把目标源写成 PL 与 LP；不要在两个谱型文件中改变空间参数或其它源的清单。然后各自运行：
 
@@ -311,11 +324,11 @@ fermiflow run --config ../configs/project.yaml --mode like \
 
 若 LP 比 PL 多一个自由参数，可报告：
 
-\[
+$$
 TS_{\rm curve}=2\left[(-\log L)_{\rm PL}-(-\log L)_{\rm LP}\right].
-\]
+$$
 
-但低显著性源、背景残差和不稳定高能 bin 都可能制造表观曲率，因此还必须检查下一步的 SED；不能只凭一个全能段 \(TS_{\rm curve}\) 下物理解读。
+但低显著性源、背景残差和不稳定高能 bin 都可能制造表观曲率，因此还必须检查下一步的 SED；不能只凭一个全能段 $TS_{\rm curve}$ 下物理解读。
 
 ---
 
@@ -349,7 +362,7 @@ SED 点的目的不是在窄能段重新测量完整谱形或空间形状，而�
 
 | 参数类别 | 建议 |
 | --- | --- |
-| 目标源 RA/DEC、Gaussian \(\sigma\) 或 Disk \(R\) | 固定为步骤 5/6 的最佳空间值 |
+| 目标源 RA/DEC、Gaussian $\sigma$ 或 Disk $R$ | 固定为步骤 5/6 的最佳空间值 |
 | 目标源 Index、alpha、beta、Scale、Eb | 固定为全能段最佳谱的值 |
 | 目标源归一化 | 放开 |
 | 邻源空间参数 | 固定 |
@@ -360,7 +373,7 @@ SED 点的目的不是在窄能段重新测量完整谱形或空间形状，而�
 
 换言之，SED 最理想的自由参数数量很少：目标源归一化、两个 diffuse normalizations，以及少量非常近/非常亮邻源的归一化。不要在每个 bin 再放开 `Index` 或 `alpha/beta`，否则得到的点不再是对同一个全能段谱模型的独立检验。
 
-首次生成第 \(i\) 个对数等宽 bin：
+首次生成第 $i$ 个对数等宽 bin：
 
 ```bash
 fermiflow run --config ../configs/project.yaml --mode bin --nbins 6 --ibin 1
@@ -382,12 +395,12 @@ fermiflow run --config ../configs/project.yaml --mode bin-fit \
 
 SED 的纵轴通常是：
 
-\[
+$$
 E^2\frac{dN}{dE}
 \quad [\mathrm{erg\ cm^{-2}\ s^{-1}}],
-\]
+$$
 
-其中微分光子通量（differential photon flux）为 \(dN/dE\)，单位通常为 \(\mathrm{ph\ cm^{-2}\ s^{-1}\ MeV^{-1}}\)。全能段积分 photon flux 与 energy flux 不能直接当作一个 SED 点。
+其中微分光子通量（differential photon flux）为 $dN/dE$，单位通常为 $\mathrm{ph\ cm^{-2}\ s^{-1}\ MeV^{-1}}$。全能段积分 photon flux 与 energy flux 不能直接当作一个 SED 点。
 
 当某 bin 的 TS 低（常用阈值是 4 或 5）、通量非正或通量误差大于通量时，应报告 95% 上限，而不是对称误差条。SED 应同时叠加步骤 7 的 PL/LP 全能段曲线；若要画 butterfly，必须使用拟合协方差矩阵或 profile likelihood，而不是只独立传播单个参数误差。
 
