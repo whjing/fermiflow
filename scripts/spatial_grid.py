@@ -320,7 +320,13 @@ def write_submit_script(path, sbatch_files):
         "",
         "# Review the .sbatch files before running this script.",
     ]
-    commands.extend(f"sbatch {shlex.quote(str(item))}" for item in sbatch_files)
+    for item in sbatch_files:
+        commands.extend(
+            [
+                f"sbatch {shlex.quote(str(item))}",
+                "sleep 3",
+            ]
+        )
     commands.append("")
     path.write_text("\n".join(commands), encoding="utf-8")
     path.chmod(0o750)

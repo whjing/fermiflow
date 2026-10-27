@@ -147,6 +147,7 @@ EOF
 
     job_id="$(sbatch --parsable "$job_script")"
     echo "Submitted ${{job_id%%;*}}: ${{tag}} on ${{node}}"
+    sleep 3
 done
 """
 

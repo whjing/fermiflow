@@ -152,8 +152,8 @@ EOF
     chmod 750 "$job_script"
 
     job_id="$(sbatch --parsable "$job_script")"
-    sleep 3
     echo "Submitted ${{job_id%%;*}}: ${{tag}} on ${{node}}"
+    sleep 3
 done
 """
 
