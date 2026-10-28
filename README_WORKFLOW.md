@@ -169,7 +169,7 @@ my_target_baseline_minuit.xml
 my_target_baseline_minuit_results.dat
 ```
 
-用收敛后的 `*_minuit.xml` 生成 TS map，检查是否有未建模残差或候选邻源：
+用收敛后的 `*_minuit.xml`，复制一份_tsmap.xml,固定全部参数 生成 TS map，检查是否有未建模残差或候选邻源：
 
 ```bash
 fermiflow run --config ../configs/project.yaml --mode tsmap \
@@ -245,6 +245,10 @@ products_1GeV/spatial_grid/<tag>/
 对于该结果 region：延展源圆是 extension 拟合得到的 best-fit extension；点源虚线圆是定位不确定度 `pos_r68`。二者含义不同，不应直接把它们的半径比较为“谁更大”。
 
 ---
+绘制
+```bash
+fermiflow spatial-grid --config ../configs/spatial_grid.yaml --plot
+```
 
 ## 6. 将重新定位结果转入 gtlike，并比较空间模型
 
@@ -252,7 +256,7 @@ products_1GeV/spatial_grid/<tag>/
 
 ```bash
 fermiflow spatial-grid --config ../configs/spatial_grid.yaml --prepare-gtlike
-bash ../sbatch/gtlike_grid/submit_gtlike_grid.sh
+bash ../sbatch/gtlike_ grid/submit_gtlike_grid.sh
 ```
 
 这里最关键的模板传递规则是：

@@ -588,17 +588,18 @@ class FermiTarget:
             irfs=self.irfs,
         )
 
-        like = BinnedAnalysis(obs, model_file, optimizer="NEWMINUIT")
+        like = BinnedAnalysis(obs, model_file, optimizer="MINUIT")
 
         if source_name not in like.sourceNames():
             raise ValueError(f"Source not found in model: {source_name}")
 
-        fit_object = pyLikelihood.NewMinuit(like.logLike)
+        # fit_object = pyLikelihood.NewMinuit(like.logLike)
+        fit_object = pyLikelihood.Minuit(like.logLike)
         like.fit(verbosity=0, covar=True, optObject=fit_object)
 
         ret_code = fit_object.getRetCode()
         if ret_code != 0:
-            logger.warning(f"NEWMINUIT return code: {ret_code}")
+            logger.warning(f"MINUIT return code: {ret_code}")
 
         neg_log_likelihood = -like.logLike.value()
         photon_flux = like.flux(source_name, self.emin, self.emax)
