@@ -104,6 +104,14 @@ paths:
   sed_model: "{project_data_dir}/models/my_target_sed_input.xml"
 ```
 
+可选的 `summary:` 区块决定每次最终 gtlike 拟合后打印哪些源的 TS、
+photon flux、energy flux 与谱参数。源名必须和 XML 完全一致：
+
+```yaml
+summary:
+  sources: [my_target, nearby_point_source, nearby_extended_source]
+```
+
 推荐的项目目录是：
 
 ```text
@@ -167,7 +175,7 @@ fermiflow run --config ../configs/project.yaml --mode tsmap --input-model ../pro
 fermiflow run --config ../configs/project.yaml --mode bin --nbins 6 --ibin 1
 ```
 
-`--ibin` 从 1 开始。首次 `bin` 要求 `ltcube`、`base_gti`、`sed_model` 均存在；分 bin 边界由 `emin`、`emax` 和 `nbins` 自动以对数间隔计算。
+`--ibin` 从 1 开始。首次 `bin` 要求 `ltcube`、`base_gti`、`sed_model` 均存在；分 bin 边界由 `emin`、`emax` 和 `nbins` 自动以对数间隔计算。若 bin 目录已经存在，流程会复用该目录并覆盖同名产品；日志会明确记录这次覆盖操作。
 
 ### 用改过的模型重跑已有 SED bin
 
@@ -175,7 +183,7 @@ fermiflow run --config ../configs/project.yaml --mode bin --nbins 6 --ibin 1
 fermiflow run --config ../configs/project.yaml --mode bin-fit --nbins 6 --ibin 6 --input-model /absolute/path/my_target_sed_6bin06-mod_input.xml
 ```
 
-`bin-fit` 不会重复事件筛选、CCUBE 和曝光图计算，但会重新生成 source maps 和两次 gtlike。它会覆盖该 bin 目录中同名拟合产物；比较不同模型前应复制 XML 或保存结果目录。
+`bin-fit` 不会重复事件筛选、CCUBE 和曝光图计算，但会重新生成 source maps 和两次 gtlike。它会覆盖该 bin 目录中同名拟合产物，并在日志中记录被复用的目录和 XML；比较不同模型前应复制 XML 或保存结果目录。
 
 ## 独立修改模型的自由参数
 

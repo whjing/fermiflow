@@ -578,8 +578,17 @@ class FermiTarget:
 
         return output_model
 
-    def print_fit_summary(self, model_file, srcmaps, source_name="kes27"):
-        """Print final likelihood, TS, fluxes, and spectral parameters."""
+    def print_fit_summary(self, model_file, srcmaps, summary_sources=None):
+        """Print final likelihood, TS, fluxes, and spectra for selected sources."""
+
+        if summary_sources is None:
+            summary_sources = []
+        elif isinstance(summary_sources, str):
+            summary_sources = [summary_sources]
+
+        summary_sources = list(dict.fromkeys(summary_sources))
+        if not summary_sources:
+            return {}
 
         obs = BinnedObs(
             srcMaps=srcmaps,
@@ -590,8 +599,12 @@ class FermiTarget:
 
         like = BinnedAnalysis(obs, model_file, optimizer="MINUIT")
 
-        if source_name not in like.sourceNames():
-            raise ValueError(f"Source not found in model: {source_name}")
+        missing_sources = set(summary_sources) - set(like.sourceNames())
+        if missing_sources:
+            raise ValueError(
+                "Source(s) not found in model: "
+                + ", ".join(sorted(missing_sources))
+            )
 
         # fit_object = pyLikelihood.NewMinuit(like.logLike)
         fit_object = pyLikelihood.Minuit(like.logLike)
@@ -602,47 +615,53 @@ class FermiTarget:
             logger.warning(f"MINUIT return code: {ret_code}")
 
         neg_log_likelihood = -like.logLike.value()
-        photon_flux = like.flux(source_name, self.emin, self.emax)
-        photon_flux_error = like.fluxError(source_name, self.emin, self.emax)
+        ts_values = {}
 
-        energy_flux = like.energyFlux(source_name, self.emin, self.emax)
-        energy_flux_error = like.energyFluxError(source_name, self.emin, self.emax)
+        for source_name in summary_sources:
+            photon_flux = like.flux(source_name, self.emin, self.emax)
+            photon_flux_error = like.fluxError(source_name, self.emin, self.emax)
 
-        ts_value = like.Ts(source_name, reoptimize=True, verbosity=0)
+            energy_flux = like.energyFlux(source_name, self.emin, self.emax)
+            energy_flux_error = like.energyFluxError(source_name, self.emin, self.emax)
 
-        upper_limit_text = ""
-        if ts_value < 5:
-            try:
-                upper_limits = UpperLimits(like)
-                photon_flux_ul, _ = upper_limits[source_name].compute(
-                    emin=self.emin,
-                    emax=self.emax,
-                    delta=1.355,
-                )
-                upper_limit_text = (
-                    f"\n95% photon-flux UL ({self.emin:g}-{self.emax:g} MeV): "
-                    f"{photon_flux_ul:.4e} ph cm^-2 s^-1\n"
-                )
-            except Exception as error:
-                logger.warning(
-                    f"Could not calculate 95% upper limit for {source_name}: {error}"
-                )
+            ts_value = like.Ts(source_name, reoptimize=True, verbosity=0)
+            ts_values[source_name] = ts_value
 
-        logger.info(
-            f"-log(Likelihood): {neg_log_likelihood:.3f}\n"
-            f"TS({source_name}): {ts_value:.3f}\n"
-            f"Photon flux ({self.emin:g}-{self.emax:g} MeV): "
-            f"({photon_flux:.4e} ± {photon_flux_error:.4e}) ph cm^-2 s^-1\n"
-            f"Energy flux ({self.emin:g}-{self.emax:g} MeV): "
-            f"({energy_flux * 1.602176634e-6:.4e} ± "
-            f"{energy_flux_error * 1.602176634e-6:.4e}) erg cm^-2 s^-1\n"
-            f"Spectral parameters:\n{like.model[source_name]}"
-            f"{upper_limit_text}"
-        )
+            upper_limit_text = ""
+            if ts_value < 5:
+                try:
+                    upper_limits = UpperLimits(like)
+                    photon_flux_ul, _ = upper_limits[source_name].compute(
+                        emin=self.emin,
+                        emax=self.emax,
+                        delta=1.355,
+                    )
+                    upper_limit_text = (
+                        f"\n95% photon-flux UL ({self.emin:g}-{self.emax:g} MeV): "
+                        f"{photon_flux_ul:.4e} ph cm^-2 s^-1\n"
+                    )
+                except Exception as error:
+                    logger.warning(
+                        "Could not calculate 95%% upper limit for %s: %s",
+                        source_name,
+                        error,
+                    )
 
-        return ts_value
+            logger.info(
+                f"-log(Likelihood): {neg_log_likelihood:.3f}\n"
+                f"TS({source_name}): {ts_value:.3f}\n"
+                f"Photon flux ({self.emin:g}-{self.emax:g} MeV): "
+                f"({photon_flux:.4e} ± {photon_flux_error:.4e}) ph cm^-2 s^-1\n"
+                f"Energy flux ({self.emin:g}-{self.emax:g} MeV): "
+                f"({energy_flux * 1.602176634e-6:.4e} ± "
+                f"{energy_flux_error * 1.602176634e-6:.4e}) erg cm^-2 s^-1\n"
+                f"Spectral parameters:\n{like.model[source_name]}"
+                f"{upper_limit_text}"
+            )
 
-    def run_gtsrcmap_gtlike2(self, input_model, source_name="kes27"):
+        return ts_values
+
+    def run_gtsrcmap_gtlike2(self, input_model, summary_sources=None):
         """
         Complete fitting workflow:
 
@@ -686,17 +705,27 @@ class FermiTarget:
 
         root = ET.parse(fitted_minuit).getroot()
         final_sources = {source.get("name") for source in root.findall("source")}
-        if source_name in final_sources:
-            self.print_fit_summary(
-                model_file=fitted_minuit,
-                srcmaps=generated_srcmaps,
-                source_name=source_name,
-            )
-        else:
-            logger.warning(
-                "Fit summary skipped: source '%s' is not in the final model.",
-                source_name,
-            )
+
+        if summary_sources is None:
+            summary_sources = []
+        elif isinstance(summary_sources, str):
+            summary_sources = [summary_sources]
+
+        available_summary_sources = []
+        for source_name in dict.fromkeys(summary_sources):
+            if source_name in final_sources:
+                available_summary_sources.append(source_name)
+            else:
+                logger.warning(
+                    "Fit summary skipped: source '%s' is not in the final model.",
+                    source_name,
+                )
+
+        self.print_fit_summary(
+            model_file=fitted_minuit,
+            srcmaps=generated_srcmaps,
+            summary_sources=available_summary_sources,
+        )
 
         logger.info("Model fitting workflow completed.")
         logger.info(f"Source maps : {generated_srcmaps}")

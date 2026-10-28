@@ -36,3 +36,9 @@ files:
   # Required only for `fermiflow run --mode bin`.
   # base_gti: "{products_dir}/{analysis_name}_gti.fits"
   # sed_model: "{project_data_dir}/models/my_target_sed_input.xml"
+
+# Sources for which fermiflow prints TS, photon flux, energy flux, and
+# spectral parameters after each gtlike MINUIT fit.  Their exact names must
+# match the XML model.  Add nearby sources when making multi-source SED plots.
+summary:
+  sources: [my_target]

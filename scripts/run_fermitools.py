@@ -33,6 +33,7 @@ def load_project(config_file, emin_override=None, emax_override=None):
     analysis = config["analysis"]
     paths = config["paths"]
     files = config["files"]
+    summary = config.get("summary", {})
     target = analysis["target"]
     emin = float(emin_override if emin_override is not None else analysis["emin"])
     emax = float(emax_override if emax_override is not None else analysis["emax"])
@@ -99,7 +100,16 @@ def load_project(config_file, emin_override=None, emax_override=None):
             if files.get("sed_model") is not None
             else None
         ),
+        # One or more sources for which the post-fit summary is printed.
+        # Omit this YAML section to retain the historical target-only output.
+        "summary_sources": summary.get("sources", [target]),
     }
+
+    if isinstance(project["summary_sources"], str):
+        project["summary_sources"] = [project["summary_sources"]]
+    elif project["summary_sources"] is None:
+        project["summary_sources"] = []
+
     return project
 
 
@@ -200,7 +210,10 @@ def run_like(project, input_model, model_policy=None):
         input_model=input_model,
         require_ltcube=True,
     )
-    return target.run_gtsrcmap_gtlike2(str(input_model), source_name=project["target"])
+    return target.run_gtsrcmap_gtlike2(
+        str(input_model),
+        summary_sources=project["summary_sources"],
+    )
 
 
 def run_sed_bin(project, nbins, bin_index, model_policy=None):
@@ -215,10 +228,13 @@ def run_sed_bin(project, nbins, bin_index, model_policy=None):
     number = bin_index + 1
     outdir, _, _ = sed_bin_output_dir(project, nbins, bin_index)
     if outdir.exists():
-        raise FileExistsError(
-            f"Refusing to overwrite existing output directory: {outdir}"
+        logger.warning(
+            "SED output directory already exists; reusing it and overwriting "
+            "same-named products (clobber=yes): %s",
+            outdir,
         )
-    outdir.mkdir(parents=True)
+    else:
+        outdir.mkdir(parents=True)
 
     input_model = outdir / f"{project['target']}_sed_{nbins}bin{number:02d}_input.xml"
     shutil.copy2(base_model, input_model)
@@ -236,7 +252,10 @@ def run_sed_bin(project, nbins, bin_index, model_policy=None):
     target.path_gti = target.path_filtered
     target.run_gtbin_ccube()
     target.run_gtexpcube2(cmap=target.path_ccube)
-    return target.run_gtsrcmap_gtlike2(str(input_model), source_name=project["target"])
+    return target.run_gtsrcmap_gtlike2(
+        str(input_model),
+        summary_sources=project["summary_sources"],
+    )
 
 
 def sed_bin_output_dir(project, nbins, bin_index):
@@ -260,6 +279,12 @@ def run_sed_bin_fit(project, nbins, bin_index, input_model, model_policy=None):
             "Run bin mode once without --input-model first."
         )
 
+    logger.warning(
+        "Reusing SED bin directory; same-named source maps and gtlike products "
+        "will be overwritten (clobber=yes): %s",
+        outdir,
+    )
+
     target_name = f"{project['target']}_{nbins}bin{bin_index + 1:02d}"
     require_file(outdir / f"{target_name}_ccube.fits", f"{nbins}-bin SED CCUBE")
     require_file(
@@ -268,6 +293,8 @@ def run_sed_bin_fit(project, nbins, bin_index, input_model, model_policy=None):
 
     model_copy = outdir / f"{target_name}_input.xml"
     if input_model.resolve() != model_copy.resolve():
+        if model_copy.exists():
+            logger.warning("Overwriting SED-bin input XML: %s", model_copy)
         shutil.copy2(input_model, model_copy)
 
     target = make_target(
@@ -278,7 +305,10 @@ def run_sed_bin_fit(project, nbins, bin_index, input_model, model_policy=None):
         emax,
         model_copy,
     )
-    return target.run_gtsrcmap_gtlike2(str(model_copy), source_name=project["target"])
+    return target.run_gtsrcmap_gtlike2(
+        str(model_copy),
+        summary_sources=project["summary_sources"],
+    )
 
 
 def run_tsmap(project, input_model, size, binsz, model_policy=None):
@@ -361,6 +391,7 @@ def main():
     logger.info("Config: %s", project["config_file"])
     logger.info("Mode: %s", args.mode)
     logger.info("Energy range: %g--%g MeV", project["emin"], project["emax"])
+    logger.info("Fit-summary sources: %s", ", ".join(project["summary_sources"]) or "none")
     if args.input_model is not None:
         logger.info("Input model: %s", args.input_model.expanduser().resolve())
     if args.model_policy is not None:
