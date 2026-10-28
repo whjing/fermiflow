@@ -291,22 +291,17 @@ def run_sed_bin_fit(project, nbins, bin_index, input_model, model_policy=None):
         outdir / f"{target_name}_bexpmap.fits", f"{nbins}-bin SED exposure map"
     )
 
-    model_copy = outdir / f"{target_name}_input.xml"
-    if input_model.resolve() != model_copy.resolve():
-        if model_copy.exists():
-            logger.warning("Overwriting SED-bin input XML: %s", model_copy)
-        shutil.copy2(input_model, model_copy)
-
     target = make_target(
         project,
         target_name,
         outdir,
         emin,
         emax,
-        model_copy,
+        input_model,
     )
+    logger.info("Using supplied SED-bin model without copying it: %s", input_model)
     return target.run_gtsrcmap_gtlike2(
-        str(model_copy),
+        str(input_model),
         summary_sources=project["summary_sources"],
     )
 

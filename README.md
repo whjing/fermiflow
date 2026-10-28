@@ -16,6 +16,8 @@ fermiflow/
     ├── spatial_grid.py           # 批量空间假设、Slurm 脚本与可选图像检查
     ├── utils.py                  # 日志与路径公共函数
     ├── model_editor.py           # 独立 XML 参数自由度策略工具
+    ├── sed_filter.py             # 手动配对、按 TS 固定 SED-bin 源
+    ├── sed_submit.py             # 为过滤后的 SED-bin XML 生成 Slurm 脚本
     ├── download.sh               # URL 列表的并行 wget 下载
     ├── fix-sedbin.py             # 依照 TS 固定 SED bin 的低显著性背景源
     ├── plot_sed.py               # 绘制 SED、PL/LogParabola 与近似误差带
@@ -23,6 +25,7 @@ fermiflow/
     └── templates/                # init 命令复制的通用 YAML 模板
         ├── project.yaml
         ├── model_policy.yaml
+        ├── sed_filter.yaml
         ├── spatial.yaml
         └── spatial_grid.yaml
 ```
@@ -69,6 +72,7 @@ fermiflow init ../configs/project.yaml
 
 ```bash
 fermiflow init-model-policy ../configs/model_policy.yaml
+fermiflow init-sed-filter ../configs/sed_filter.yaml
 fermiflow init-spatial ../configs/spatial.yaml --target my_target --energy-label 1GeV
 fermiflow init-spatial-grid ../configs/spatial_grid.yaml --target my_target --energy-label 1GeV
 ```
@@ -183,7 +187,37 @@ fermiflow run --config ../configs/project.yaml --mode bin --nbins 6 --ibin 1
 fermiflow run --config ../configs/project.yaml --mode bin-fit --nbins 6 --ibin 6 --input-model /absolute/path/my_target_sed_6bin06-mod_input.xml
 ```
 
-`bin-fit` 不会重复事件筛选、CCUBE 和曝光图计算，但会重新生成 source maps 和两次 gtlike。它会覆盖该 bin 目录中同名拟合产物，并在日志中记录被复用的目录和 XML；比较不同模型前应复制 XML 或保存结果目录。
+`bin-fit` 不会重复事件筛选、CCUBE 和曝光图计算，但会重新生成 source maps 和两次 gtlike。它直接使用 `--input-model` 指定的 XML，**不会**复制或覆盖该 bin 原来的 `*_input.xml`；新产物沿用所传 XML 的文件名前缀（例如 `*-tslt2_srcmaps.fits`、`*-tslt2_minuit.xml`）。只有重复运行同一个输入 XML 时，才会覆盖该 XML 对应的同名产物。
+
+### 依照上一轮 TS 过滤 SED-bin 模型并生成重跑脚本
+
+先完成每个 bin 的第一轮拟合，获得对应的 `*_minuit_results.dat`。随后创建配置：
+
+```bash
+fermiflow init-sed-filter ../configs/sed_filter.yaml
+```
+
+在 `jobs:` 中**手动**写入每一组 `ibin`、`input_model` 和 `results_file`。同一项中的 XML 与 results 文件必须来自同一个能段；工具不会自动扫描或猜测配对关系。运行：
+
+```bash
+fermiflow sed-filter --config ../configs/sed_filter.yaml
+```
+
+它会对 TS 小于 `ts_threshold` 的源固定参数，生成 `*-tsltX_input.xml`。指定在 `keep_normalization_sources` 中的源即使 TS 较低，也只固定谱形和空间参数，保留其归一化参数原有的 free/fixed 状态。每个新 XML 都会打印修改前后的自由参数总数。
+
+确认新 XML 后，使用同一份 YAML 生成每个 `bin-fit` 的 `.sbatch` 文件与总提交脚本：
+
+```bash
+fermiflow sed-submit --config ../configs/sed_filter.yaml
+```
+
+`sed-submit` 只生成脚本，不会自动提交任务。检查后运行：
+
+```bash
+bash ../sbatch/sed_6bin_tslt2/submit_sed_filter.sh
+```
+
+该脚本在每两个 Slurm 任务之间固定等待 3 秒；这是内置行为，无需也不能通过 YAML 设置。
 
 ## 独立修改模型的自由参数
 

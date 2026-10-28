@@ -1,0 +1,33 @@
+# Manually paired TS-filtered SED refits.
+# Paths are resolved relative to this YAML file.  Each input XML MUST be paired
+# with the *_minuit_results.dat made from that same SED bin; no auto-matching is
+# performed.
+
+project_config: ../configs/project.yaml  # CHANGE ME: project YAML used by fermiflow run
+working_dir: ../scripts                 # Directory from which batch jobs run
+nbins: 6
+ts_threshold: 2.0
+
+# For these sources only: if TS is below the threshold, fix their shape and
+# spatial parameters but preserve the normalization parameter's existing state.
+keep_normalization_sources: [my_target]
+
+jobs: []
+  # Add every bin explicitly.  ibin, XML, and results file must describe the
+  # same energy bin.
+  # - ibin: 1
+  #   input_model: ../products_100MeV/bin_01_.../my_target_sed_6bin01_input.xml
+  #   results_file: ../products_100MeV/bin_01_.../my_target_sed_6bin01_minuit_results.dat
+  #   # Optional.  Default is <input stem>-tslt2_input.xml.
+  #   # output_model: ../products_100MeV/bin_01_.../my_target_sed_6bin01-tslt2_input.xml
+
+# `fermiflow sed-submit --config <this file>` generates Slurm jobs after the
+# filtered XML files exist.  Its master script always waits 3 seconds between
+# jobs; do not add a submission-delay setting here.
+slurm:
+  sbatch_dir: ../sbatch/sed_6bin_tslt2
+  log_dir: ../logs/sed_6bin_tslt2
+  conda_env: fermi
+  # Change if your Conda installation is elsewhere.
+  conda_sh: ~/miniforge3/etc/profile.d/conda.sh
+  nodes: [c001, c002, c003, c004, c005]

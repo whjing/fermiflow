@@ -83,6 +83,9 @@ def main() -> None:
     subparsers.add_parser(
         "init-model-policy", help="Copy the generic XML free-parameter policy template."
     ).add_argument("config", nargs="?", type=Path, default=Path("model_policy.yaml"))
+    subparsers.add_parser(
+        "init-sed-filter", help="Copy the manually paired TS-filtered SED refit template."
+    ).add_argument("config", nargs="?", type=Path, default=Path("sed_filter.yaml"))
     # Workflow-specific options are deliberately not duplicated here.  They
     # are collected below and passed straight to their implementing script.
     subparsers.add_parser("run", help="Run the Fermitools workflow.")
@@ -90,12 +93,14 @@ def main() -> None:
     subparsers.add_parser("spatial-grid", help="Generate or plot a grid of spatial hypotheses.")
     subparsers.add_parser("download", help="Download URLs in parallel with wget.")
     subparsers.add_parser("model", help="Create an XML with a parameter-freeing policy.")
+    subparsers.add_parser("sed-filter", help="Make TS-filtered SED-bin XML models.")
+    subparsers.add_parser("sed-submit", help="Write Slurm jobs for filtered SED-bin models.")
 
     # Forward unknown options to the selected workflow.  This lets users write
     # ``fermiflow spatial --config ...`` as well as the older ``-- --config``
     # form, without teaching this lightweight wrapper every workflow option.
     args, forwarded_args = parser.parse_known_args()
-    if args.command in {"path", "init", "init-spatial", "init-spatial-grid", "init-model-policy"} and forwarded_args:
+    if args.command in {"path", "init", "init-spatial", "init-spatial-grid", "init-model-policy", "init-sed-filter"} and forwarded_args:
         parser.error("unrecognized arguments: " + " ".join(forwarded_args))
 
     if args.command == "path":
@@ -126,12 +131,18 @@ def main() -> None:
         write_template(args.config.expanduser().resolve(), "model_policy.yaml")
         return
 
+    if args.command == "init-sed-filter":
+        write_template(args.config.expanduser().resolve(), "sed_filter.yaml")
+        return
+
     script_name = {
         "run": "run_fermitools.py",
         "spatial": "run_spatial.py",
         "spatial-grid": "spatial_grid.py",
         "download": "download.sh",
         "model": "model_editor.py",
+        "sed-filter": "sed_filter.py",
+        "sed-submit": "sed_submit.py",
     }[args.command]
     raise SystemExit(run_script(script_name, forwarded_args))
 
