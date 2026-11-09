@@ -636,10 +636,27 @@ class FermiTarget:
                         emax=self.emax,
                         delta=1.355,
                     )
+                    # UpperLimits returns an integral photon-flux limit.  The
+                    # SED plot also needs a corresponding energy-flux limit.
+                    # In a bin fit the spectral shape is normally fixed, so
+                    # the fitted energy/photon-flux ratio supplies the
+                    # shape-dependent conversion without another likelihood
+                    # scan.  Do not report an energy UL if that conversion is
+                    # undefined.
+                    energy_flux_ul = None
+                    if photon_flux > 0 and energy_flux > 0:
+                        energy_flux_ul = photon_flux_ul * energy_flux / photon_flux
+
                     upper_limit_text = (
                         f"\n95% photon-flux UL ({self.emin:g}-{self.emax:g} MeV): "
                         f"{photon_flux_ul:.4e} ph cm^-2 s^-1\n"
                     )
+                    if energy_flux_ul is not None:
+                        upper_limit_text += (
+                            f"95% energy-flux UL ({self.emin:g}-{self.emax:g} MeV): "
+                            f"{energy_flux_ul * 1.602176634e-6:.4e} "
+                            "erg cm^-2 s^-1\n"
+                        )
                 except Exception as error:
                     logger.warning(
                         "Could not calculate 95%% upper limit for %s: %s",

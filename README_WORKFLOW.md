@@ -1,6 +1,6 @@
 # Fermi-LAT 分析流程手册
 
-这是一份按实际分析顺序组织的工作手册，适合从一个新目标开始完成 Fermi-LAT 的空间分析、全能段谱拟合和 SED。它是对 [README.md](README.md) 命令参考的补充，**不会替代或覆盖原 README**。
+这是一份按实际分析顺序组织的工作手册，适合从一个新目标开始完成 Fermi-LAT 的空间分析、全能段谱拟合和 SED。
 
 本文中的命令假设当前目录是项目的 `scripts/`：
 
@@ -25,8 +25,6 @@ my_project/
 ```bash
 fermiflow init ../configs/project.yaml
 fermiflow init-model-policy ../configs/model_policy.yaml
-fermiflow init-spatial ../configs/spatial.yaml --target my_target --energy-label 1GeV
-fermiflow init-spatial-grid ../configs/spatial_grid.yaml --target my_target --energy-label 1GeV
 ```
 
 首先编辑 `project.yaml` 中的：
@@ -44,7 +42,7 @@ fermiflow init-spatial-grid ../configs/spatial_grid.yaml --target my_target --en
 
 ## 1. 下载 LAT 数据和公共模型
 
-在 FSSC Data Portal 根据 ROI 中心、时间范围、能段和下载半径取得 Photon 与 Spacecraft 文件链接。下载半径通常要覆盖事件筛选半径并留出 PSF 余量；不要只按可见射电壳的大小下载。
+在 FSSC Data Portal 根据 ROI 中心、时间范围、能段和下载半径取得 Photon 与 Spacecraft 文件链接。下载半径通常要覆盖事件筛选半径并留出 PSF 余量。
 
 将下载页提供的 URL（或整段 `wget ... URL` 文本）保存为 `../rawdata/urls.txt`，然后并行下载：
 
@@ -85,7 +83,7 @@ data/
 └── my_target_ltcube.fits
 ```
 
-初始 XML 是**目录模型**，不是最终科学模型。它包含 catalogue 源和 diffuse backgrounds，适合作为空间组合的共同起点。
+初始 XML 是**目录模型**，不是最终科学模型。它包含 catalogue 源和 diffuse backgrounds。
 
 ### 目录 region 文件
 
@@ -96,11 +94,11 @@ data/
 - `RadialDisk`：中心十字与 $r_{68}=\sqrt{0.68}R$ 圆；
 - Galactic/isotropic diffuse 与 `SpatialMap` 等没有圆对称尺度的源：跳过，不强行画成圆。
 
-这份 region 适合检查 catalogue 初始模型，不能替代后续重新定位得到的空间结果。
+可用改 region 文件检查 catalogue 初始模型。
 
 ---
 
-## 3. 在正式拟合前设定“谁可以变化”
+## 3. 修改模板所放开的自由参数
 
 不要直接修改唯一的 catalogue XML。用 `fermiflow model` 复制并写出一个具有明确自由度策略的新 XML：
 
@@ -185,6 +183,11 @@ fermiflow run --config ../configs/project.yaml --mode tsmap \
 
 空间结论应该遵循：**每种空间假设独立定位/延展拟合 → 将最佳空间参数交给 gtlike → 比较同一数据下的 likelihood**。只把一个点源挪到 Gaussian 中心，而不重新拟合点源位置，不能作为点源与延展源的公平比较。
 
+生成空间模板文件。
+```bash
+fermiflow init-spatial ../configs/spatial.yaml --target my_target --energy-label 1GeV
+fermiflow init-spatial-grid ../configs/spatial_grid.yaml --target my_target --energy-label 1GeV
+```
 ### 5.1 单一空间假设的快速测试
 
 编辑 `spatial.yaml`：

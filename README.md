@@ -1,4 +1,4 @@
-# fermiflow
+# fermiflow pipeline 内容讲解
 
 用于 Fermi-LAT binned-likelihood 与 Fermipy 空间拟合的轻量工作流。仓库提供不绑定具体天体的 YAML 模板；每个项目都从模板生成自己的配置文件，避免覆盖已有结果。
 
