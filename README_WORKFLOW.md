@@ -72,15 +72,15 @@ fermiflow run --config ../configs/project.yaml --mode prepare
 
 ```text
 products_1GeV/
-├── my_target_1GeV_filtered.fits
-├── my_target_1GeV_gti.fits
-├── my_target_1GeV_cmap.fits
-├── my_target_1GeV_ccube.fits
-├── my_target_1GeV_bexpmap.fits
-└── my_target_1GeV_input.xml
+├── myTarget_1GeV_filtered.fits
+├── myTarget_1GeV_gti.fits
+├── myTarget_1GeV_cmap.fits
+├── myTarget_1GeV_ccube.fits
+├── myTarget_1GeV_bexpmap.fits
+└── myTarget_1GeV_input.xml
 
 data/
-└── my_target_ltcube.fits
+└── myTarget_ltcube.fits
 ```
 
 初始 XML 是**目录模型**，不是最终科学模型。它包含 catalogue 源和 diffuse backgrounds。
@@ -104,9 +104,9 @@ data/
 
 ```bash
 fermiflow model \
-  --input-model ../products_1GeV/my_target_1GeV_input.xml \
+  --input-model ../products_1GeV/myTarget_1GeV_input.xml \
   --policy ../configs/model_policy.yaml \
-  --output-model ../data/models/my_target_baseline_input.xml
+  --output-model ../data/models/myTarget_baseline_input.xml
 ```
 
 `model_policy.yaml` 的三个无歧义策略为：
@@ -127,7 +127,7 @@ radial:
   outside_policy: fixed
 background_norms: [gll_iem_v07, iso_P8R3_SOURCE_V3_v1]
 sources:
-  my_target: spectral
+  myTarget: spectral
 ```
 
 含义是：目标源和近处显著邻源可重拟合谱；较远源只改变归一化；更远源固定；银河与各向同性背景只改变归一化。这样既保留足够的背景弹性，也避免大量低显著性源造成不稳定拟合。
@@ -136,7 +136,7 @@ sources:
 
 ```yaml
 ts_filter:
-  results_file: ../products_1GeV/my_target_baseline_minuit_results.dat
+  results_file: ../products_1GeV/myTarget_baseline_minuit_results.dat
   threshold: 25.0
   radial:
     zones:
@@ -155,23 +155,23 @@ ts_filter:
 
 ```bash
 fermiflow run --config ../configs/project.yaml --mode like \
-  --input-model ../data/models/my_target_baseline_input.xml
+  --input-model ../data/models/myTarget_baseline_input.xml
 ```
 
 每次 `like` 都重新生成与该 XML 对应的 source maps，然后运行 DRMNFB 与 MINUIT。常见产品为：
 
 ```text
-my_target_baseline_srcmaps.fits
-my_target_baseline_drmnfb.xml
-my_target_baseline_minuit.xml
-my_target_baseline_minuit_results.dat
+myTarget_baseline_srcmaps.fits
+myTarget_baseline_drmnfb.xml
+myTarget_baseline_minuit.xml
+myTarget_baseline_minuit_results.dat
 ```
 
 用收敛后的 `*_minuit.xml`，复制一份_tsmap.xml,固定全部参数 生成 TS map，检查是否有未建模残差或候选邻源：
 
 ```bash
 fermiflow run --config ../configs/project.yaml --mode tsmap \
-  --input-model ../data/models/my_target_baseline_minuit.xml \
+  --input-model ../data/models/myTarget_baseline_minuit.xml \
   --size 5 --binsz 0.05
 ```
 
@@ -185,8 +185,8 @@ fermiflow run --config ../configs/project.yaml --mode tsmap \
 
 生成空间模板文件。
 ```bash
-fermiflow init-spatial ../configs/spatial.yaml --target my_target --energy-label 1GeV
-fermiflow init-spatial-grid ../configs/spatial_grid.yaml --target my_target --energy-label 1GeV
+fermiflow init-spatial ../configs/spatial.yaml --target myTarget --energy-label 1GeV
+fermiflow init-spatial-grid ../configs/spatial_grid.yaml --target myTarget --energy-label 1GeV
 ```
 ### 5.1 单一空间假设的快速测试
 
@@ -213,12 +213,12 @@ fermiflow spatial --config ../configs/spatial.yaml \
 
 ```yaml
 base:
-  input_model: ../data/models/my_target_baseline_input.xml
+  input_model: ../data/models/myTarget_baseline_input.xml
   spatial_template: ../configs/spatial.yaml
   output_root: ../products_1GeV/spatial_grid
 
 sources:
-  - name: my_target
+  - name: myTarget
     include: [true]
     models: [point, gaussian, disk]
     seed:
@@ -323,10 +323,10 @@ $$
 
 ```bash
 fermiflow run --config ../configs/project.yaml --mode like \
-  --input-model ../data/models/my_target_bestspace_pl_input.xml
+  --input-model ../data/models/myTarget_bestspace_pl_input.xml
 
 fermiflow run --config ../configs/project.yaml --mode like \
-  --input-model ../data/models/my_target_bestspace_lp_input.xml
+  --input-model ../data/models/myTarget_bestspace_lp_input.xml
 ```
 
 若 LP 比 PL 多一个自由参数，可报告：
@@ -346,13 +346,13 @@ $$
 SED 的起点应是步骤 7 的**最佳全能段谱拟合结果**，通常是：
 
 ```text
-my_target_bestspace_pl_minuit.xml
+myTarget_bestspace_pl_minuit.xml
 ```
 
 或在谱曲率显著时使用 LP 结果。把它复制到项目 `data/models/`，例如：
 
 ```text
-data/models/my_target_sed_input.xml
+data/models/myTarget_sed_input.xml
 ```
 
 并在 `project.yaml` 中设置：
@@ -360,7 +360,7 @@ data/models/my_target_sed_input.xml
 ```yaml
 files:
   base_gti: "{products_dir}/{analysis_name}_gti.fits"
-  sed_model: "{project_data_dir}/models/my_target_sed_input.xml"
+  sed_model: "{project_data_dir}/models/myTarget_sed_input.xml"
 ```
 
 ### 8.2 每个 SED bin 应固定与放开的参数
@@ -393,7 +393,7 @@ fermiflow run --config ../configs/project.yaml --mode bin --nbins 6 --ibin 1
 ```bash
 fermiflow run --config ../configs/project.yaml --mode bin-fit \
   --nbins 6 --ibin 4 \
-  --input-model /absolute/path/my_target_sed_bin04-mod_input.xml
+  --input-model /absolute/path/myTarget_sed_bin04-mod_input.xml
 ```
 
 `bin-fit` 会复用已经生成的 bin CCUBE/曝光图，但重新生成 source maps 并完成两次 gtlike；修改空间模板、源清单或任意 XML 后不能复用旧 source maps。
@@ -434,14 +434,14 @@ $$
 ```text
 project.yaml
 model_policy.yaml
-my_target_baseline_input.xml
+myTarget_baseline_input.xml
 spatial_grid.yaml
 spatial_grid_manifest.csv
 <tag>_spatial_final.xml
 <tag>_reloc_input.xml
 <tag>_reloc_minuit.xml
-my_target_bestspace_{pl,lp}_minuit.xml
-my_target_sed_input.xml
+myTarget_bestspace_{pl,lp}_minuit.xml
+myTarget_sed_input.xml
 SED bin logs / results / plot
 ```
 
