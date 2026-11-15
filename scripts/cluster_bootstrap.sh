@@ -14,4 +14,3 @@ conda activate "$CONDA_ENV"
 python -m pip install -e "$ROOT_DIR" --no-deps
 
 echo "Installed editable fermiflow from: $ROOT_DIR"
-fermiflow path

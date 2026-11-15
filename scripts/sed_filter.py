@@ -9,49 +9,22 @@ XML model from another bin.
 from __future__ import annotations
 
 import argparse
-import ast
-import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import yaml
 
 
-NORMALIZATION_NAMES = {
-    "prefactor", "norm", "normalization", "integral", "value", "amplitude"
-}
+if __package__:
+    from .model_editor import NORMALIZATION_NAMES, count_free_parameters, read_ts_values
+else:
+    from edit_model import NORMALIZATION_NAMES, count_free_parameters, read_ts_values
 
 
 def resolve_path(value, base_dir):
     """Resolve one YAML path relative to the YAML file itself."""
     path = Path(value).expanduser()
     return path if path.is_absolute() else (base_dir / path).resolve()
-
-
-def read_ts_values(results_file):
-    """Read source-name/TS pairs from a gtlike ``*_results.dat`` file."""
-    text = results_file.read_text(encoding="utf-8", errors="replace")
-    try:
-        values = ast.literal_eval(text)
-        return {
-            name: float(source["TS value"])
-            for name, source in values.items()
-            if "TS value" in source
-        }
-    except (SyntaxError, ValueError, TypeError, AttributeError):
-        pass
-
-    sources = re.compile(r"['\"](?P<name>[^'\"]+)['\"]\s*:\s*\{(?P<body>.*?)\}", re.DOTALL)
-    ts_pattern = re.compile(r"['\"]TS value['\"]\s*:\s*['\"]?([-+0-9.eE]+)")
-    return {
-        match.group("name"): float(ts.group(1))
-        for match in sources.finditer(text)
-        if (ts := ts_pattern.search(match.group("body")))
-    }
-
-
-def count_free_parameters(root):
-    return sum(parameter.get("free") == "1" for parameter in root.iter("parameter"))
 
 
 def normalization_parameter(source):
@@ -77,22 +50,6 @@ def fix_low_ts_source(source, keep_normalization):
             parameter.set("free", "0")
             changed += 1
     return changed
-
-
-def indent_xml(element, level=0):
-    """Indent XML without relying on ``ET.indent`` (Python 3.8 compatible)."""
-    prefix = "\n" + "  " * level
-    child_prefix = "\n" + "  " * (level + 1)
-    children = list(element)
-    if children:
-        if not element.text or not element.text.strip():
-            element.text = child_prefix
-        for child in children:
-            indent_xml(child, level + 1)
-        if not children[-1].tail or not children[-1].tail.strip():
-            children[-1].tail = prefix
-    if level and (not element.tail or not element.tail.strip()):
-        element.tail = prefix
 
 
 def output_model_path(input_model, threshold):
@@ -136,7 +93,7 @@ def filter_one_job(job, threshold, keep_normalization_sources):
         fixed_sources.append((name, ts, changed, keep_norm))
 
     output_model.parent.mkdir(parents=True, exist_ok=True)
-    indent_xml(root)
+    ET.indent(tree, space="  ")
     tree.write(output_model, encoding="UTF-8", xml_declaration=True)
     return {
         "ibin": job["ibin"],

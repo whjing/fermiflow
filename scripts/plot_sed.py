@@ -9,8 +9,6 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
-import shlex
-import stat
 
 
 TARGET = "kes27"
@@ -38,127 +36,8 @@ PL_MODEL = Path("../products_100MeV/kes27_point-pl-1_minuit.xml")
 LOGPARABOLA_MODEL = Path("../products_100MeV/kes27_point-logpl-1_minuit.xml")
 
 OUTPUT_DIR = Path("../products_100MeV/sed_6bin")
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 OUTPUT_PNG = OUTPUT_DIR / "kes27_sed_6bin_pl_logparabola.png"
-
-def write_submit_script(model_files):
-    """
-    Generate one shell script that submits one Slurm SED job per modified XML.
-    The generated shell script does not submit anything until you run it.
-    """
-    script_dir = Path.cwd().resolve()
-    run_script = (script_dir / "run_fermitools.py").resolve()
-    config_file = (script_dir / "kes27_100MeV.yaml").resolve()
-
-    if not run_script.is_file():
-        raise FileNotFoundError(f"run_fermitools.py not found: {run_script}")
-
-    if not config_file.is_file():
-        raise FileNotFoundError(f"YAML config not found: {config_file}")
-
-    nbins = len(model_files)
-    submit_script = script_dir / f"submit_sed_{nbins}bin_mod.sh"
-
-    model_lines = "\n".join(
-        f"    {shlex.quote(str(model_file.resolve()))}"
-        for model_file in model_files
-    )
-
-    content = f"""#!/usr/bin/env bash
-# Submit SED-bin jobs using the cleaned -mod_input.xml models.
-
-set -euo pipefail
-
-SCRIPT_DIR="$(cd -- "$(dirname -- "${{BASH_SOURCE[0]}}")" && pwd)"
-RUN_SCRIPT={shlex.quote(str(run_script))}
-CONFIG_FILE={shlex.quote(str(config_file))}
-NBINS={nbins}
-
-SBATCH_DIR="${{SBATCH_DIR:-$SCRIPT_DIR/../sbatch/sed_${{NBINS}}bin_mod}}"
-LOG_DIR="${{LOG_DIR:-$SCRIPT_DIR/../logs/sed_${{NBINS}}bin_mod}}"
-CONDA_ENV="${{CONDA_ENV:-fermi}}"
-
-NODES=(c001 c002 c003 c004 c005)
-
-MODELS=(
-{model_lines}
-)
-
-if command -v conda >/dev/null 2>&1; then
-    CONDA_SH="${{CONDA_SH:-$(conda info --base)/etc/profile.d/conda.sh}}"
-else
-    CONDA_SH="${{CONDA_SH:-/share/home/whjing/miniforge3/etc/profile.d/conda.sh}}"
-fi
-
-[[ -f "$RUN_SCRIPT" ]] || {{ echo "Missing run script: $RUN_SCRIPT" >&2; exit 1; }}
-[[ -f "$CONFIG_FILE" ]] || {{ echo "Missing YAML config: $CONFIG_FILE" >&2; exit 1; }}
-[[ -f "$CONDA_SH" ]] || {{ echo "Missing conda.sh: $CONDA_SH" >&2; exit 1; }}
-
-mkdir -p "$SBATCH_DIR" "$LOG_DIR"
-SBATCH_DIR="$(realpath -e "$SBATCH_DIR")"
-LOG_DIR="$(realpath -e "$LOG_DIR")"
-
-for index in "${{!MODELS[@]}}"; do
-    ibin=$((index + 1))
-    input_model="${{MODELS[index]}}"
-    node="${{NODES[index % ${{#NODES[@]}}]}}"
-    tag="sed-${{NBINS}}bin-mod-$(printf '%02d' "$ibin")"
-    job_script="$SBATCH_DIR/${{tag}}.sbatch"
-
-    [[ -f "$input_model" ]] || {{
-        echo "Missing modified XML: $input_model" >&2
-        exit 1
-    }}
-
-    cat > "$job_script" <<EOF
-#!/usr/bin/env bash
-#SBATCH --job-name=${{tag}}
-#SBATCH --nodes=1
-#SBATCH --ntasks=1
-#SBATCH --cpus-per-task=1
-#SBATCH --nodelist=${{node}}
-#SBATCH --output=${{LOG_DIR}}/%x-%j.log
-#SBATCH --error=${{LOG_DIR}}/%x-%j.log
-
-set -eo pipefail
-
-source "${{CONDA_SH}}"
-conda activate "${{CONDA_ENV}}"
-
-echo "========================================"
-echo "Job ID:      ${{SLURM_JOB_ID}}"
-echo "Node:        $(hostname)"
-echo "SED bin:     ${{ibin}}/${{NBINS}}"
-echo "Input model: ${{input_model}}"
-echo "========================================"
-
-cd "${{SCRIPT_DIR}}"
-
-exec "$(command -v python)" "${{RUN_SCRIPT}}" \\
-    --config "${{CONFIG_FILE}}" \\
-    --mode bin-fit \\
-    --nbins "${{NBINS}}" \\
-    --ibin "${{ibin}}" \\
-    --input-model "${{input_model}}"
-EOF
-
-    chmod 750 "$job_script"
-
-    job_id="$(sbatch --parsable "$job_script")"
-    echo "Submitted ${{job_id%%;*}}: ${{tag}} on ${{node}}"
-    sleep 3
-done
-"""
-
-    submit_script.write_text(content, encoding="utf-8")
-    submit_script.chmod(submit_script.stat().st_mode | stat.S_IXUSR)
-
-    print(f"\\nCreated submission script: {submit_script}")
-    print("Submit all modified SED jobs with:")
-    print(f"  bash {submit_script}")
-
-    return submit_script
 
 
 def parameter_value(parameter):
@@ -513,6 +392,7 @@ def main():
     ax.legend(loc="best")
 
     fig.tight_layout()
+    OUTPUT_PNG.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(OUTPUT_PNG, dpi=220, bbox_inches="tight")
     plt.show()
 

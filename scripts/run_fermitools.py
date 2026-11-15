@@ -14,7 +14,7 @@ import numpy as np
 import yaml
 
 from fermi_target import FermiTarget, logger
-from model_editor import apply_model_policy, default_output_path, load_model_policy
+from edit_model import apply_model_policy, default_output_path, load_model_policy
 from utils import configure_logger, require_file, render_path
 
 
@@ -22,7 +22,6 @@ def energy_label(energy_mev):
     if energy_mev >= 1000 and energy_mev % 1000 == 0:
         return f"{energy_mev / 1000:g}GeV"
     return f"{energy_mev:g}MeV"
-
 
 
 def load_project(config_file, emin_override=None, emax_override=None):
@@ -53,13 +52,20 @@ def load_project(config_file, emin_override=None, emax_override=None):
     context["analysis_name"] = f"{target}_{context['energy_label']}"
     products_dir = render_path(paths["products_dir"], context)
     context["products_dir"] = str(products_dir)
-    common_data_dir = render_path(
-        paths.get("common_data_dir", paths.get("template_dir", "~/data/fermi")),
+    archive_dir = render_path(
+        paths.get(
+            "archive_dir",
+            paths.get("common_data_dir", paths.get("template_dir", "~/data/fermi")),
+        ),
         context,
     )
-    project_data_dir = render_path(paths.get("project_data_dir", "./data"), context)
-    context["common_data_dir"] = str(common_data_dir)
-    context["project_data_dir"] = str(project_data_dir)
+    shared_dir = render_path(
+        paths.get("shared_dir", paths.get("project_data_dir", "../shared")), context
+    )
+    context["archive_dir"] = str(archive_dir)
+    context["common_data_dir"] = str(archive_dir)  # Legacy path placeholder.
+    context["shared_dir"] = str(shared_dir)
+    context["project_data_dir"] = str(shared_dir)  # Legacy path placeholder.
 
     project = {
         "config_file": config_file,
@@ -77,8 +83,8 @@ def load_project(config_file, emin_override=None, emax_override=None):
         "irfs": analysis.get("irfs", "P8R3_SOURCE_V3"),
         "analysis_name": context["analysis_name"],
         "energy_label": context["energy_label"],
-        "common_data_dir": common_data_dir,
-        "project_data_dir": project_data_dir,
+        "archive_dir": archive_dir,
+        "shared_dir": shared_dir,
         "rawdata_dir": render_path(paths["rawdata_dir"], context),
         "products_dir": products_dir,
         "log_dir": render_path(paths.get("log_dir", "../logs"), context),
@@ -158,7 +164,7 @@ def make_target(
         evtype=project["evtype"],
         mapsize_deg=project["mapsize_deg"],
         binsz=project["binsz"],
-        dir_template=str(project["common_data_dir"]),
+        dir_template=str(project["archive_dir"]),
         dir_rawdata=str(project["rawdata_dir"]),
         dir_products=str(output_dir),
         file_catalog=project["catalog"],
@@ -196,9 +202,13 @@ def run_prepare(project):
     target.run_gtbin_cmap()
     target.run_gtbin_ccube()
     target.run_gtexpcube2()
+    shared_dir = project["shared_dir"]
+    shared_dir.mkdir(parents=True, exist_ok=True)
+    target.path_model_input = str(shared_dir / Path(target.path_model_input).name)
     target.run_make4FGLxml()
 
     return target
+
 
 def run_like(project, input_model, model_policy=None):
     require_full_band_products(project)
@@ -223,10 +233,8 @@ def run_sed_bin(project, nbins, bin_index, model_policy=None):
     require_file(project["ltcube"], "Livetime cube")
     base_gti = require_file(project["base_gti"], "Full-band GTI")
     base_model = require_file(project["sed_model"], "SED base model")
-    edges = np.geomspace(project["emin"], project["emax"], nbins + 1)
-    emin, emax = float(edges[bin_index]), float(edges[bin_index + 1])
     number = bin_index + 1
-    outdir, _, _ = sed_bin_output_dir(project, nbins, bin_index)
+    outdir, emin, emax = sed_bin_output_dir(project, nbins, bin_index)
     if outdir.exists():
         logger.warning(
             "SED output directory already exists; reusing it and overwriting "
@@ -261,7 +269,9 @@ def run_sed_bin(project, nbins, bin_index, model_policy=None):
 def sed_bin_output_dir(project, nbins, bin_index):
     edges = np.geomspace(project["emin"], project["emax"], nbins + 1)
     emin, emax = float(edges[bin_index]), float(edges[bin_index + 1])
-    tag = f"bin_{bin_index + 1:02d}_{emin * 1e-3:.2f}-{emax * 1e-3:.2f}GeV".replace(".", "p")
+    tag = f"bin_{bin_index + 1:02d}_{emin * 1e-3:.2f}-{emax * 1e-3:.2f}GeV".replace(
+        ".", "p"
+    )
     return (project["products_dir"] / tag).resolve(), emin, emax
 
 
@@ -356,7 +366,8 @@ def parse_args():
         "--log-name", help="Log basename; timestamp is appended automatically."
     )
     parser.add_argument(
-        "--model-policy", type=Path,
+        "--model-policy",
+        type=Path,
         help="Optional standalone YAML policy used to create an edited XML before fitting.",
     )
     args = parser.parse_args()
@@ -386,7 +397,9 @@ def main():
     logger.info("Config: %s", project["config_file"])
     logger.info("Mode: %s", args.mode)
     logger.info("Energy range: %g--%g MeV", project["emin"], project["emax"])
-    logger.info("Fit-summary sources: %s", ", ".join(project["summary_sources"]) or "none")
+    logger.info(
+        "Fit-summary sources: %s", ", ".join(project["summary_sources"]) or "none"
+    )
     if args.input_model is not None:
         logger.info("Input model: %s", args.input_model.expanduser().resolve())
     if args.model_policy is not None:
@@ -399,7 +412,9 @@ def main():
     elif args.mode == "bin":
         run_sed_bin(project, args.nbins, args.ibin - 1, model_policy)
     elif args.mode == "bin-fit":
-        run_sed_bin_fit(project, args.nbins, args.ibin - 1, args.input_model, model_policy)
+        run_sed_bin_fit(
+            project, args.nbins, args.ibin - 1, args.input_model, model_policy
+        )
     elif args.mode == "tsmap":
         run_tsmap(project, args.input_model, args.size, args.binsz, model_policy)
     else:

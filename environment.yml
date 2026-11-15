@@ -1,0 +1,14 @@
+name: fermi
+channels:
+  - conda-forge
+  - fermi
+  - nodefaults
+dependencies:
+  - python=3.12
+  - fermitools>=2.2
+  - healpy
+  - gammapy
+  - pip
+  - setuptools
+  - git
+  - wget

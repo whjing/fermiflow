@@ -3,12 +3,35 @@
 from __future__ import annotations
 
 import argparse
-from importlib import resources
+import json
+from importlib import metadata, resources
 import subprocess
 import sys
 from pathlib import Path
 
-__version__ = "0.1.0"
+def version_text() -> str:
+    """Report the installed package version and its source commit."""
+    try:
+        package = metadata.distribution("fermiflow")
+    except metadata.PackageNotFoundError:
+        return "fermiflow (not installed)"
+
+    origin = json.loads(package.read_text("direct_url.json") or "{}")
+    commit = origin.get("vcs_info", {}).get("commit_id")
+    if not commit:
+        commit_file = package.locate_file("scripts/_git_commit.txt")
+        if commit_file.is_file():
+            commit = commit_file.read_text(encoding="utf-8").strip()
+    return f"fermiflow {package.version} (git: {commit or 'unknown'})"
+
+
+INIT_TEMPLATES = {
+    "project": "fermitools_project.yaml",
+    "spatial": "spatial_fit.yaml",
+    "spatial-grid": "spatial_grid.yaml",
+    "model-policy": "model_policy.yaml",
+    "sed-filter": "sed_filter.yaml",
+}
 
 
 def script_directory() -> Path:
@@ -37,6 +60,8 @@ def write_template(path: Path, template_name: str, replacements=None) -> None:
 
     template = script_directory() / "templates" / template_name
     if not template.is_file():
+        template = Path(__file__).resolve().parent / "templates" / template_name
+    if not template.is_file():
         raise SystemExit(f"Bundled template not found: {template_name}")
     text = template.read_text(encoding="utf-8")
     for key, value in (replacements or {}).items():
@@ -59,33 +84,14 @@ def main() -> None:
         prog="fermiflow",
         description="Run scripts from the currently installed fermiflow checkout.",
     )
-    parser.add_argument("--version", action="version", version=f"fermiflow {__version__}")
+    parser.add_argument("--version", action="version", version=version_text())
 
     subparsers = parser.add_subparsers(dest="command", required=True)
-    subparsers.add_parser("path", help="Print the repository used by this command.")
-    subparsers.add_parser("init", help="Copy the generic Fermitools project template.").add_argument(
-        "config", nargs="?", type=Path, default=Path("project.yaml")
-    )
-    spatial_init = subparsers.add_parser(
-        "init-spatial", help="Copy the generic Fermipy spatial-fit template."
-    )
-    spatial_init.add_argument("config", nargs="?", type=Path, default=Path("spatial.yaml"))
-    spatial_init.add_argument("--target", default="my_target")
-    spatial_init.add_argument("--energy-label", default="2GeV")
-    spatial_grid_init = subparsers.add_parser(
-        "init-spatial-grid", help="Copy the generic spatial-model grid template."
-    )
-    spatial_grid_init.add_argument(
-        "config", nargs="?", type=Path, default=Path("spatial_grid.yaml")
-    )
-    spatial_grid_init.add_argument("--target", default="my_target")
-    spatial_grid_init.add_argument("--energy-label", default="2GeV")
-    subparsers.add_parser(
-        "init-model-policy", help="Copy the generic XML free-parameter policy template."
-    ).add_argument("config", nargs="?", type=Path, default=Path("model_policy.yaml"))
-    subparsers.add_parser(
-        "init-sed-filter", help="Copy the manually paired TS-filtered SED refit template."
-    ).add_argument("config", nargs="?", type=Path, default=Path("sed_filter.yaml"))
+    init = subparsers.add_parser("init", help="Generate a YAML configuration template.")
+    init.add_argument("--mode", required=True, choices=INIT_TEMPLATES)
+    init.add_argument("--config", type=Path, help="Output YAML path (defaults to the template filename).")
+    init.add_argument("--target", help="Target name for spatial templates (default: my_target).")
+    init.add_argument("--energy-label", help="Energy label for spatial templates (default: 2GeV).")
     # Workflow-specific options are deliberately not duplicated here.  They
     # are collected below and passed straight to their implementing script.
     subparsers.add_parser("run", help="Run the Fermitools workflow.")
@@ -100,47 +106,29 @@ def main() -> None:
     # ``fermiflow spatial --config ...`` as well as the older ``-- --config``
     # form, without teaching this lightweight wrapper every workflow option.
     args, forwarded_args = parser.parse_known_args()
-    if args.command in {"path", "init", "init-spatial", "init-spatial-grid", "init-model-policy", "init-sed-filter"} and forwarded_args:
-        parser.error("unrecognized arguments: " + " ".join(forwarded_args))
-
-    if args.command == "path":
-        print(script_directory().parent)
-        return
-
     if args.command == "init":
-        write_template(args.config.expanduser().resolve(), "project.yaml")
-        return
+        if forwarded_args:
+            init.error("unrecognized arguments: " + " ".join(forwarded_args))
 
-    if args.command == "init-spatial":
-        write_template(
-            args.config.expanduser().resolve(),
-            "spatial.yaml",
-            spatial_replacements(args.target, args.energy_label),
-        )
-        return
+        template = INIT_TEMPLATES[args.mode]
+        replacements = None
+        if args.mode in {"spatial", "spatial-grid"}:
+            replacements = spatial_replacements(
+                args.target or "my_target", args.energy_label or "2GeV"
+            )
+        elif args.target is not None or args.energy_label is not None:
+            init.error("--target and --energy-label are only available for spatial templates")
 
-    if args.command == "init-spatial-grid":
-        write_template(
-            args.config.expanduser().resolve(),
-            "spatial_grid.yaml",
-            spatial_replacements(args.target, args.energy_label),
-        )
-        return
-
-    if args.command == "init-model-policy":
-        write_template(args.config.expanduser().resolve(), "model_policy.yaml")
-        return
-
-    if args.command == "init-sed-filter":
-        write_template(args.config.expanduser().resolve(), "sed_filter.yaml")
+        output = args.config or Path(template)
+        write_template(output.expanduser().resolve(), template, replacements)
         return
 
     script_name = {
         "run": "run_fermitools.py",
-        "spatial": "run_spatial.py",
+        "spatial": "fit_spatial.py",
         "spatial-grid": "spatial_grid.py",
         "download": "download.sh",
-        "model": "model_editor.py",
+        "model": "edit_model.py",
         "sed-filter": "sed_filter.py",
         "sed-submit": "sed_submit.py",
     }[args.command]

@@ -20,7 +20,7 @@ from pathlib import Path
 
 import yaml
 
-from model_editor import apply_model_policy, load_model_policy
+from edit_model import apply_model_policy, load_model_policy
 
 
 MODEL_TYPES = {

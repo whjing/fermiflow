@@ -2,7 +2,7 @@
 """Run one Fermipy spatial-fit configuration.
 
 Example:
-    python spatial_fit.py --config ../configs/spatial_2gev.yaml
+    fermiflow spatial --config ../configs/spatial_fit.yaml
 """
 
 import argparse
@@ -12,7 +12,7 @@ from pathlib import Path
 
 import yaml
 from fermipy.gtanalysis import GTAnalysis
-from model_editor import apply_model_policy, default_output_path, load_model_policy
+from edit_model import apply_model_policy, default_output_path, load_model_policy
 from utils import configure_logger, require_file, render_path
 
 
@@ -366,5 +366,5 @@ def main():
 
 
 if __name__ == "__main__":
-    logfile = configure_logger(logger, "../logs", "run_spatial.log")
+    logfile = configure_logger(logger, "../logs", "fit_spatial.log")
     main()

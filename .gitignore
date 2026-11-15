@@ -11,3 +11,7 @@ sbatch/
 *.npy
 *.log
 *.par
+
+# Python build artifacts
+build/
+*.egg-info/
