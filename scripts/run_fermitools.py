@@ -324,7 +324,7 @@ def run_tsmap(project, input_model, size, binsz, model_policy=None):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Kes 27 Fermitools workflow.")
+    parser = argparse.ArgumentParser(description="Fermitools workflow.")
     parser.add_argument("--config", type=Path, required=True, help="Project YAML file.")
     parser.add_argument(
         "--mode", required=True, choices=("prepare", "like", "bin", "bin-fit", "tsmap")
