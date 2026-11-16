@@ -1,5 +1,6 @@
 """Small reusable helpers for the Kes 27 analysis scripts."""
 
+import faulthandler
 import logging
 from datetime import datetime
 from pathlib import Path
@@ -13,7 +14,9 @@ def configure_logger(logger, log_dir, basename, *, file_level=logging.DEBUG,
     basename = Path(basename).name.removesuffix(".log")
     log_file = log_dir / f"{basename}_{datetime.now():%Y%m%d_%H%M%S}.log"
 
-    logger.handlers.clear()
+    for handler in logger.handlers[:]:
+        logger.removeHandler(handler)
+        handler.close()
     logger.setLevel(logging.DEBUG)
     logger.propagate = False
 
@@ -31,7 +34,24 @@ def configure_logger(logger, log_dir, basename, *, file_level=logging.DEBUG,
         handler.setFormatter(formatter)
         logger.addHandler(handler)
 
+    faulthandler.enable(file=file_handler.stream)
     return log_file
+
+
+def run_with_error_logging(main, logger, basename):
+    """Log a workflow failure with its traceback and return a nonzero status."""
+    try:
+        main()
+    except (Exception, KeyboardInterrupt):
+        if not logger.handlers:
+            try:
+                log_file = configure_logger(logger, "../logs", basename)
+                logger.info("Log file: %s", log_file)
+            except OSError as error:
+                logger.error("Could not open the fallback log: %s", error)
+        logger.exception("Workflow stopped")
+        return 1
+    return 0
 
 
 def require_file(path, label):

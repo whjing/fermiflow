@@ -1,10 +1,13 @@
 # Fermipy 空间分析
+## 生成空间模型模板
 
 ```bash
-fermiflow spatial --config ../configs/spatial_fit.yaml
+fermiflow init --mode spatial --config ../configs/spatial_fit.yaml --target my_target --energy-label 1GeV
 ```
+将 `fermipy.data.evfile` 指向 `prepare` 生成的 GTI，将 `fermipy.data.ltcube` 指向已有 livetime cube，并核对 `fermipy.model.catalogs` 和 `sources` 的源名。
 
-先运行 `fermiflow init --mode spatial --config ../configs/spatial_fit.yaml --target my_target --energy-label 1GeV`。将 `fermipy.data.evfile` 指向 `prepare` 生成的 GTI，将 `fermipy.data.ltcube` 指向已有 livetime cube，并核对 `fermipy.model.catalogs` 和 `sources` 的源名。空间配置独立于 Fermitools 配置，使用 Fermipy 的 `fermipy:` 块以及顶层 `output:`、`outputs:` 和 `sources:`。例如：
+
+空间配置独立于 Fermitools 配置，使用 Fermipy 的 `fermipy:` 块以及顶层 `output:`、`outputs:` 和 `sources:`。例如：
 
 ```yaml
 sources:
@@ -22,6 +25,10 @@ sources:
       dtheta_max: 1.0
       nstep: 20
 ```
+运行
+```bash
+fermiflow spatial --config ../configs/spatial_fit.yaml
+```
 
 该流程写出最终 ROI XML 与 CARTA-compatible region。由 `prepare` 自动生成的 catalogue region 也会直接从输出 XML 读取空间模型：点源画中心十字，`RadialGaussian` 与 `RadialDisk` 画中心十字和换算后的 \(r_{68}\) 圆。银河/各向同性背景及没有圆对称参数的空间模板不会被伪装成圆形 region。正式报告 `TS_ext` 时，点源与延展模型应各自独立定位并重新优化背景，不能把点源中心固定到延展模型中心后直接作显著性结论。
 
@@ -37,7 +44,7 @@ fermiflow init --mode spatial-grid --config ../configs/spatial_grid.yaml --targe
 
 ```yaml
 base:
-  input_model: ../shared/my_target_1GeV_model_16yr.xml
+  input_model: ../shared/my_target_model_16yr.xml
   spatial_template: ../configs/spatial_my_target_1GeV.yaml
   output_root: ../products_1GeV/spatial_grid
   # model_policy: ../configs/modify-model.yaml

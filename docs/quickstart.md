@@ -24,7 +24,6 @@ my_project/
 
 ```bash
 fermiflow init --mode project --config ../configs/fermitools_project.yaml
-fermiflow init --mode model-policy --config ../configs/model_policy.yaml
 ```
 
 首先编辑 `fermitools_project.yaml` 中的：
@@ -57,7 +56,7 @@ fermiflow download ../rawdata/urls.txt ../rawdata 6
 - Fermi-LAT 源表：
   - [FL16Y 16 年源表 `gll_psc_v38.xml`](https://fermi.gsfc.nasa.gov/ssc/data/access/lat/fl16y/gll_psc_v38.xml)
   - [4FGL-DR4 14 年源表 `gll_psc_v32.xml`](https://fermi.gsfc.nasa.gov/ssc/data/access/lat/14yr_catalog/gll_psc_v32.xml)
-- 银河系弥散辐射模型 [`gll_iem_v07.fits`](https://fermi.gsfc.nasa.gov/ssc/data/analysis/software/aux/4fgl/gll_iem_v07.fits)
+- the current Galactic diffuse emission model [`gll_iem_v07.fits`](https://fermi.gsfc.nasa.gov/ssc/data/analysis/software/aux/4fgl/gll_iem_v07.fits)
 - 各向同性弥散谱（`P8R3_SOURCE_V3`，FRONT + BACK）[`iso_P8R3_SOURCE_V3_v1.txt`](https://fermi.gsfc.nasa.gov/ssc/data/analysis/software/aux/iso_P8R3_SOURCE_V3_v1.txt)
 
 这些公共背景文件可跨项目共享；项目特有的 livetime cube、模型 XML 和 region 文件应放在 `data/`。
@@ -84,79 +83,76 @@ products_1GeV/
 
 shared/
 ├── myTarget_ltcube.fits
-├── myTarget_1GeV_model_16yr.xml
-└── ROI_myTarget_1GeV_model_16yr_carta.reg
+├── myTarget_model_16yr.xml
+└── ROI_myTarget_model_16yr_carta.reg
 ```
 
 初始 XML 是**目录模型**，不是最终科学模型。它包含 catalogue 源和 diffuse backgrounds。
 
 ### 目录 region 文件
 
-生成 XML 时，流水线会额外写出一个 CARTA 可直接读入的 `.reg` 文件。它从 XML 的 `spatialModel` 读取信息：
+生成 XML 时，流水线会额外写出一个 CARTA 可直接读入的 `.reg` 文件。它结合 XML 的 `spatialModel` 和源表坐标绘制标记：
 
 - `SkyDirFunction` 点源：中心十字；
-- `RadialGaussian`：中心十字与 $r_{68}=1.5096\sigma$ 圆；
-- `RadialDisk`：中心十字与 $r_{68}=\sqrt{0.68}R$ 圆；
-- Galactic/isotropic diffuse 与 `SpatialMap` 等没有圆对称尺度的源：跳过，不强行画成圆。
-
-可用改 region 文件检查 catalogue 初始模型。
-
+- `RadialGaussian`：中心十字与 $r_{68}$ 圆；
+- `RadialDisk`：中心十字与 $r_{68}=$ 圆；
+- `SpatialMap`：有坐标时在源中心画菱形并标注源名。
+- 无坐标的 `SpatialMap` 与 Galactic/isotropic diffuse：跳过。
 ---
 
-## 4. 基准全能段似然拟合与残差检查
+## 修改模型文件
 
-按[模型参数策略](model-policy.md)建立 baseline XML，再用它 进行一次全能段拟合：
 
 ```bash
-fermiflow run --config ../configs/fermitools_project.yaml --mode like \
-  --input-model ../shared/models/myTarget_baseline_input.xml
+fermiflow init --mode model-policy --config ../configs/model_policy.yaml
+```
+
+编辑 `model_policy.yaml`，按需设置邻源的半径分区、弥散背景的归一化和指定源的自由参数。然后把上一节 `prepare` 生成的初始 XML 作为输入，写出下一节基准拟合使用的模型。
+
+```bash
+fermiflow model --input-model ../shared/myTarget_model_16yr.xml --policy ../configs/model_policy.yaml --output-model ../products_1GeV/myTarget_1GeV_model_init-1_input.xml
+```
+
+命令会报告修改前后的自由参数总数。策略字段见[模型参数策略](model-policy.md)。
+
+## 4. 基准全能段似然拟合
+进行gtlike拟合，注意或需要反复迭代，到quality =3. 
+
+```bash
+fermiflow run --config ../configs/fermitools_project.yaml --mode like --input-model ../shared/models/myTarget__model_init-1_input.xml
 ```
 
 每次 `like` 都重新生成与该 XML 对应的 source maps，然后运行 DRMNFB 与 MINUIT。常见产品为：
 
 ```text
-myTarget_baseline_srcmaps.fits
-myTarget_baseline_drmnfb.xml
-myTarget_baseline_minuit.xml
-myTarget_baseline_minuit_results.dat
+myTarget_model_init-1_srcmaps.fits
+myTarget_model_init-1_drmnfb.xml
+myTarget_model_init-1_minuit.xml
+myTarget_model_init-1_minuit_results.dat
 ```
 
-使用下例的 `*_minuit.xml` 生成 TS map，检查是否有未建模残差或候选邻源：
+## 残差检查
+
+从分析项目的 `scripts/` 目录运行。先用 `fermiflow model` 将基准拟合的 `*_minuit.xml` 另存为 `*_xxx-tsmap.xml`，并将所有源的谱参数和空间参数设为 `free="0"`。参数数值沿用 MINUIT 拟合结果，原始拟合 XML 保留。
 
 ```bash
-fermiflow run --config ../configs/fermitools_project.yaml --mode tsmap \
+fermiflow model --default-policy fixed \
   --input-model ../shared/models/myTarget_baseline_minuit.xml \
-  --size 5 --binsz 0.05
+  --output-model ../shared/models/myTarget_baseline_xxx-tsmap.xm;
+```
+
+确认命令显示输出模型的自由参数数为 `0`。然后用这份固定后的 XML 生成 TS map，检查是否有未建模的残差或候选邻源。
+
+```bash
+fermiflow run --config ../configs/fermitools_project.yaml --mode tsmap --input-model ../shared/models/myTarget_baseline_minuit_fixed.xml --size 5 --binsz 0.05
 ```
 
 若 TS map 显示稳定的新残差，应先把该候选源加入共同的模型模板，再开始空间模型之间的正式比较。不要让不同候选空间组合使用不同的背景源清单。
+---
+## Nest step
+
+[spatial analysis](spatial.md)
 
 ---
-
-
-## 用链接文本多核下载 Fermi 数据
-
-将 Fermi 下载页面给出的普通链接保存为 `urls.txt`。文件既可以是每行一个 URL，也可以直接粘贴一大段普通 `wget ... URL` 文本；脚本会自动抽取全部 HTTP(S) 链接：
-
-```text
-https://.../PH00.fits
-https://.../PH01.fits
-https://.../SC00.fits
-```
-
-然后设置下载目录和并行任务数：
-
-```bash
-fermiflow download ../urls.txt ../rawdata 6
-```
-
-等价于：
-
-```bash
-bash /path/to/fermiflow/scripts/download.sh ../urls.txt ../rawdata 6
-```
-
-这里的 `6` 是同时运行的 wget 数。脚本使用 `wget --continue`，中断后用同一命令可继续下载未完成文件。
-
-
-下一步可做[空间拟合](spatial.md)或[谱与 SED 分析](sed.md)。
+## Reference and Guide
+- [binned_likelihood_tutorial](https://github.com/fermi-lat/AnalysisThreads/blob/master/SourceAnalysis/1.BinnedLikelihood/binned_likelihood_tutorial.ipynb)

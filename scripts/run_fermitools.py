@@ -13,9 +13,11 @@ from pathlib import Path
 import numpy as np
 import yaml
 
-from fermi_target import FermiTarget, logger
 from edit_model import apply_model_policy, default_output_path, load_model_policy
-from utils import configure_logger, require_file, render_path
+from utils import configure_logger, require_file, render_path, run_with_error_logging
+
+
+logger = logging.getLogger("FermiAnalysis")
 
 
 def energy_label(energy_mev):
@@ -148,6 +150,8 @@ def make_target(
     input_model=None,
     require_ltcube=False,
 ):
+    from fermi_target import FermiTarget
+
     path_ltcube = project["ltcube"]
     if path_ltcube is not None and require_ltcube:
         path_ltcube = require_file(path_ltcube, "Livetime cube")
@@ -204,7 +208,7 @@ def run_prepare(project):
     target.run_gtexpcube2()
     shared_dir = project["shared_dir"]
     shared_dir.mkdir(parents=True, exist_ok=True)
-    target.path_model_input = str(shared_dir / Path(target.path_model_input).name)
+    target.path_model_input = str(shared_dir / f"{project['target']}_model_16yr.xml")
     target.run_make4FGLxml()
 
     return target
@@ -386,10 +390,8 @@ def parse_args():
     return args
 
 
-def main():
-    args = parse_args()
+def main(args):
     project = load_project(args.config, args.emin, args.emax)
-    model_policy = load_model_policy(args.model_policy) if args.model_policy else None
     log_name = args.log_name or f"{args.mode}_{project['energy_label']}"
     log_file = configure_logger(logger, project["log_dir"], log_name)
     logger.info("Log file: %s", log_file)
@@ -404,6 +406,8 @@ def main():
         logger.info("Input model: %s", args.input_model.expanduser().resolve())
     if args.model_policy is not None:
         logger.info("Model policy: %s", args.model_policy.expanduser().resolve())
+
+    model_policy = load_model_policy(args.model_policy) if args.model_policy else None
 
     if args.mode == "prepare":
         run_prepare(project)
@@ -422,4 +426,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    args = parse_args()
+    raise SystemExit(
+        run_with_error_logging(lambda: main(args), logger, args.log_name or args.mode)
+    )

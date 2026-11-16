@@ -152,6 +152,7 @@ class FermiTarget:
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
+            errors="replace",
             bufsize=1,  # 1 表示行缓冲，即遇到换行符就立刻推出来
         )
 
@@ -164,10 +165,7 @@ class FermiTarget:
 
         # check if the command was successful
         if process.returncode != 0:
-            logger.error(f"Command failed with return code: {process.returncode}")
-            raise RuntimeError(
-                "Fermi tool execution failed. Please check the log file for details."
-            )
+            raise subprocess.CalledProcessError(process.returncode, cmd)
 
     def exam_rawdata(self):
         """Check the raw data directory structure and file naming conventions."""
@@ -301,15 +299,9 @@ class FermiTarget:
         except (TypeError, ValueError):
             return None
 
-    def write_carta_regions_from_model(self, model_file, region_file):
-        """Write one CARTA-compatible region file using the XML spatial models.
-
-        Point sources are shown by a centre cross.  Radial Gaussian and disk
-        sources are shown by a centre cross plus a circle whose radius is the
-        corresponding containment radius r68.  Diffuse backgrounds and spatial
-        templates without a circular parameterisation are intentionally skipped:
-        drawing a circle for them would be physically misleading.
-        """
+    def write_carta_regions_from_model(self, model_file, region_file, catalog_sources=None):
+        """Write CARTA markers for point, radial, and catalog map sources."""
+        catalog_sources = catalog_sources or {}
         root = ET.parse(model_file).getroot()
         lines = [
             "# Region file format: DS9 version 4.1",
@@ -318,6 +310,7 @@ class FermiTarget:
         ]
         point_count = 0
         extended_count = 0
+        map_count = 0
         skipped = []
 
         for source in root.findall("source"):
@@ -334,9 +327,26 @@ class FermiTarget:
             source_name = source.get("name", "unnamed").replace("{", "(").replace("}", ")")
             model_type = spatial_model.get("type", "")
 
-            # Galactic/isotropic diffuse components and map templates generally
-            # have no single sky position, so they cannot be represented by a
-            # meaningful circular region.
+            if model_type == "SpatialMap":
+                coordinates = catalog_sources.get(source.get("name"), source.attrib)
+                try:
+                    map_ra = float(coordinates.get("RA"))
+                    map_dec = float(coordinates.get("DEC"))
+                except (TypeError, ValueError):
+                    map_ra, map_dec = ra, dec
+
+                if (
+                    map_ra is not None and map_dec is not None
+                    and np.isfinite(map_ra) and -90 <= map_dec <= 90
+                ):
+                    lines.append(
+                        f"point({map_ra:.8f},{map_dec:.8f}) # point=diamond text={{{source_name}}}"
+                    )
+                    map_count += 1
+                else:
+                    skipped.append(f"{source_name} (SpatialMap without coordinates)")
+                continue
+
             if ra is None or dec is None:
                 if model_type not in {"SkyDirFunction", "PointSource"}:
                     skipped.append(f"{source_name} ({model_type or 'unknown spatial model'})")
@@ -369,11 +379,11 @@ class FermiTarget:
 
         print(
             f"[DONE] CARTA region file written: {region_file} "
-            f"({point_count} point, {extended_count} extended sources)."
+            f"({point_count} point, {extended_count} radial, {map_count} SpatialMap sources)."
         )
         if skipped:
             logger.info(
-                "Skipped %d source(s) without a circular sky model: %s",
+                "Skipped %d source(s) without a supported region representation: %s",
                 len(skipped),
                 "; ".join(skipped),
             )
@@ -411,12 +421,14 @@ class FermiTarget:
             max_free_radius=max_free_radius,
             sigma_to_free=sigma_to_free,
             variable_free=variable_free,
-            galactic_index_free=False,  # new
+            galactic_index_free=False,
+            make_region=False,
         )
 
         self.write_carta_regions_from_model(
             model_file=self.path_model_input,
             region_file=file_carta,
+            catalog_sources=source_list.sources,
         )
         print(f"[{self.name}] [DONE] 4FGL XML model generated: {self.path_model_input}\n")
 

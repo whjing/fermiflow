@@ -4,7 +4,7 @@
 
 base:
   # CHANGE ME: XML containing every source that may appear in any hypothesis.
-  input_model: ../shared/__ANALYSIS_NAME___model_16yr.xml
+  input_model: ../shared/__TARGET___model_16yr.xml
   spatial_template: ../configs/spatial___TARGET_____ENERGY_LABEL__.yaml
   output_root: ../products___ENERGY_LABEL__/spatial_grid
   # model_policy: ../configs/model_policy_spatial.yaml

@@ -11,9 +11,8 @@ import logging
 from pathlib import Path
 
 import yaml
-from fermipy.gtanalysis import GTAnalysis
 from edit_model import apply_model_policy, default_output_path, load_model_policy
-from utils import configure_logger, require_file, render_path
+from utils import configure_logger, require_file, render_path, run_with_error_logging
 
 
 logger = logging.getLogger("spatial_fit")
@@ -298,6 +297,8 @@ def run_source_spatial_fit(
 
 def main():
     args = parse_args()
+    log_file = configure_logger(logger, "../logs", "fit_spatial")
+    logger.info("Log file: %s", log_file)
     config_file = args.config.expanduser().resolve()
 
     with config_file.open(encoding="utf-8") as handle:
@@ -326,6 +327,8 @@ def main():
     logger.info("Configuration: %s", config_file)
     logger.info("Output directory: %s", outdir)
     logger.info("Configured spatial sources: %d", len(sources))
+
+    from fermipy.gtanalysis import GTAnalysis
 
     gta = GTAnalysis(fermipy_config, logging={"verbosity": 3})
     gta.setup()
@@ -366,5 +369,4 @@ def main():
 
 
 if __name__ == "__main__":
-    logfile = configure_logger(logger, "../logs", "fit_spatial.log")
-    main()
+    raise SystemExit(run_with_error_logging(main, logger, "fit_spatial_error"))

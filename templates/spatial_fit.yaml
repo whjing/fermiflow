@@ -40,7 +40,7 @@ fermipy:
     galdiff: ~/data/fermi/gll_iem_v07.fits
     isodiff: ~/data/fermi/iso_P8R3_SOURCE_V3_v1.txt
     catalogs:
-      - ../shared/__ANALYSIS_NAME___model_16yr.xml
+      - ../shared/__TARGET___model_16yr.xml
 
   optimizer:
     optimizer: MINUIT
