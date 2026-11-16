@@ -185,12 +185,8 @@ def count_free_parameters(root):
     return sum(parameter.get("free") == "1" for parameter in root.iter("parameter"))
 
 
-def apply_model_policy(input_model, output_model, config):
-    """Apply a YAML-compatible policy dictionary and write a new XML model."""
-    input_model = Path(input_model).expanduser().resolve()
-    output_model = Path(output_model).expanduser().resolve()
-    tree = ET.parse(input_model)
-    root = tree.getroot()
+def apply_model_policy_to_sources(root, config):
+    """Update free flags in an in-memory XML model."""
     original_free_parameters = count_free_parameters(root)
     summary = []
     ts_filter = config.get("ts_filter", {})
@@ -205,10 +201,20 @@ def apply_model_policy(input_model, output_model, config):
         changed = set_source_policy(source, policy)
         summary.append((source.get("name", ""), policy, changed))
 
+    return summary, original_free_parameters, count_free_parameters(root)
+
+
+def apply_model_policy(input_model, output_model, config):
+    """Apply a YAML-compatible policy dictionary and write a new XML model."""
+    input_model = Path(input_model).expanduser().resolve()
+    output_model = Path(output_model).expanduser().resolve()
+    tree = ET.parse(input_model)
+    result = apply_model_policy_to_sources(tree.getroot(), config)
+
     output_model.parent.mkdir(parents=True, exist_ok=True)
     ET.indent(tree, space="  ")
     tree.write(output_model, encoding="UTF-8", xml_declaration=True)
-    return summary, original_free_parameters, count_free_parameters(root)
+    return result
 
 
 def default_output_path(input_model):

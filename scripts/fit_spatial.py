@@ -8,6 +8,8 @@ Example:
 import argparse
 import copy
 import logging
+from glob import glob, has_magic
+from math import isfinite
 from pathlib import Path
 
 import yaml
@@ -196,6 +198,15 @@ def resolve_fermipy_paths(config, base_dir):
         if key in config.get("data", {}):
             config["data"][key] = resolve_path(config["data"][key], base_dir)
 
+    scfile = config.get("data", {}).get("scfile")
+    if scfile and has_magic(scfile):
+        matches = sorted(path for path in glob(scfile) if Path(path).is_file())
+        if not matches:
+            raise FileNotFoundError(f"No spacecraft FITS matches: {scfile}")
+        if len(matches) > 1:
+            raise ValueError(f"Multiple spacecraft FITS match {scfile}: {', '.join(matches)}")
+        config["data"]["scfile"] = matches[0]
+
     for key in ("galdiff", "isodiff"):
         if key in config.get("model", {}):
             config["model"][key] = resolve_path(config["model"][key], base_dir)
@@ -303,6 +314,13 @@ def main():
 
     with config_file.open(encoding="utf-8") as handle:
         config = yaml.safe_load(handle)
+
+    selection = config["fermipy"].get("selection", {})
+    tmin, tmax = selection.get("tmin"), selection.get("tmax")
+    if type(tmin) not in (int, float) or type(tmax) not in (int, float):
+        raise ValueError("Set fermipy.selection.tmin and tmax to Fermi MET seconds.")
+    if not (isfinite(tmin) and isfinite(tmax) and tmin < tmax):
+        raise ValueError("Require finite Fermi MET times with tmin < tmax.")
 
     base_dir = config_file.parent
     fermipy_config = resolve_fermipy_paths(config["fermipy"], base_dir)

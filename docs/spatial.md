@@ -9,6 +9,10 @@ fermiflow init --mode spatial --config ../configs/spatial_fit.yaml --target my_t
 
 空间配置独立于 Fermitools 配置，使用 Fermipy 的 `fermipy:` 块以及顶层 `output:`、`outputs:` 和 `sources:`。例如：
 
+在 `fermipy.selection` 中填写 `tmin` 和 `tmax`，单位是 Fermi MET 秒。两项都必须填写，且 `tmin < tmax`。时间范围应与输入 GTI 和活时立方体一致。
+
+`fermipy.data.scfile` 默认用 `../rawdata/*SC*.fits` 查找航天器文件，路径以模板 YAML 所在目录为基准。运行拟合时必须匹配一个文件。如果匹配多个，请在配置里指定具体文件。
+
 ```yaml
 sources:
   - name: target
@@ -34,7 +38,13 @@ fermiflow spatial --config ../configs/spatial_fit.yaml
 
 ### 批量生成空间模型组合
 
+
 当需要系统比较多个源的 Point/Gaussian/Disk 模板，以及可选邻近点源是否存在时，使用独立的空间组合配置。先生成模板：
+
+
+```bash
+fermiflow init --mode spatial --config ../configs/spatial_fit.yaml --target my_target --energy-label 1GeV
+```
 
 ```bash
 fermiflow init --mode spatial-grid --config ../configs/spatial_grid.yaml --target my_target --energy-label 1GeV
@@ -87,12 +97,14 @@ my_target-gaussian-extend-disk
 fermiflow spatial-grid --config ../configs/spatial_grid.yaml
 ```
 
+若设置了 `base.model_policy`，生成器会在各组合的源增删与空间模板设置完成后应用策略，再写出 `<tag>_spatial.xml`。空间任务直接读取这份 XML。
+
 该命令**不会提交任务**。它会写出：
 
 ```text
 products_1GeV/spatial_grid/
-├── models/<tag>_spatial.xml
-├── configs/spatial_<tag>.yaml
+├── <tag>_spatial.xml
+├── spatial_<tag>.yaml
 ├── <tag>/                         # 每个组合的 Fermipy 输出目录
 └── spatial_grid_manifest.csv
 
@@ -163,7 +175,7 @@ fermiflow spatial-grid --config ../configs/spatial_grid.yaml --prepare-gtlike
 
 Fermipy 本身常把 `write_roi()` 的 XML 临时写为 `<tag>_spatial_final_00.xml`；流水线会在空间拟合成功后自动规范化为 `<tag>_spatial_final.xml`。对于已在旧版本流水线完成的任务，`--prepare-gtlike` 也会自动识别最新的 `_00.xml` 文件并记录其实际路径。
 
-`_reloc_input.xml` 始终从 `gtlike.template_model`（未设置时为 `base.input_model`）复制：它保留模板内所有谱参数、背景源、其它邻源及其 `free` 状态。脚本只从对应的 `<tag>_spatial_final.xml` 读取候选源的最佳空间模型、RA、DEC 与延展尺度，并按组合删除缺失源。若设置 `gtlike.model_policy`，会在此基础上额外统一修改自由参数策略；若要让其它内容严格保持模板一致，请不要设置该项。
+`_reloc_input.xml` 始终从 `gtlike.template_model`（未设置时为 `base.input_model`）复制：它保留模板内所有谱参数、背景源、其它邻源及其 `free` 状态。脚本只从对应的 `<tag>_spatial_final.xml` 读取候选源的最佳空间模型、RA、DEC 与延展尺度，并按组合删除缺失源。若设置 `gtlike.model_policy`，会在此基础上额外统一修改自由参数策略；省略该项时会沿用 `base.model_policy`。若要保留模板原有的参数自由状态，可显式设置 `gtlike.model_policy: null`。
 
 该步骤只为已完成的 spatial 结果写入 gtlike `.sbatch`，不会自动提交：
 

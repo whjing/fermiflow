@@ -20,7 +20,7 @@ from pathlib import Path
 
 import yaml
 
-from edit_model import apply_model_policy, load_model_policy
+from edit_model import apply_model_policy, apply_model_policy_to_sources, load_model_policy
 
 
 MODEL_TYPES = {
@@ -271,7 +271,7 @@ def grid_sources(source_configs, choices):
     return sources
 
 
-def write_sbatch(path, tag, config_path, slurm, model_policy):
+def write_sbatch(path, tag, config_path, slurm):
     """Write one independent Slurm job; submission remains an explicit later step."""
     nodes = slurm.get("nodes", [])
     node = nodes[slurm["index"] % len(nodes)] if nodes else None
@@ -289,10 +289,6 @@ def write_sbatch(path, tag, config_path, slurm, model_policy):
             f"#SBATCH --error={slurm['log_dir']}/%x-%j.log",
         ]
     )
-    policy_argument = ""
-    if model_policy:
-        policy_argument = f" --model-policy {shlex.quote(str(model_policy))}"
-
     path.write_text(
         "\n".join(
             [
@@ -303,7 +299,7 @@ def write_sbatch(path, tag, config_path, slurm, model_policy):
                 *conda_activation_lines(slurm),
                 f"conda activate {shlex.quote(str(slurm['conda_env']))}",
                 f"cd {shlex.quote(str(slurm['working_dir']))}",
-                f"exec fermiflow spatial --config {shlex.quote(str(config_path))}{policy_argument}",
+                f"exec fermiflow spatial --config {shlex.quote(str(config_path))}",
                 "",
             ]
         ),
@@ -473,6 +469,8 @@ def generate_grid(config_path):
     if model_policy and not model_policy.is_file():
         raise FileNotFoundError(f"Model policy not found: {model_policy}")
 
+    policy = load_model_policy(model_policy) if model_policy else None
+
     source_configs = grid.get("sources", [])
     if not source_configs:
         raise ValueError("No sources are configured in spatial_grid.yaml.")
@@ -491,10 +489,6 @@ def generate_grid(config_path):
         raise ValueError(f"Sources missing from input XML: {sorted(missing_names)}")
 
     output_root.mkdir(parents=True, exist_ok=True)
-    model_dir = output_root / "models"
-    config_dir = output_root / "configs"
-    model_dir.mkdir(exist_ok=True)
-    config_dir.mkdir(exist_ok=True)
 
     slurm = resolve_slurm_config(grid.get("slurm"), base_dir, output_root, "spatial_grid")
 
@@ -516,7 +510,10 @@ def generate_grid(config_path):
 
         # This XML belongs to the Fermipy spatial stage.  Reserve *_input.xml
         # for the later Fermitools/gtlike stage.
-        model_path = model_dir / f"{tag}_spatial.xml"
+        model_path = output_root / f"{tag}_spatial.xml"
+        if policy and policy.get("enabled", True) is not False:
+            _, original_free, final_free = apply_model_policy_to_sources(root, policy)
+            print(f"Applied {model_policy} to {tag}: free parameters {original_free} -> {final_free}")
         ET.indent(tree, space="  ")
         tree.write(model_path, encoding="UTF-8", xml_declaration=True)
 
@@ -534,13 +531,13 @@ def generate_grid(config_path):
         # copying it outside this hypothesis directory.
         spatial_config["outputs"]["model_name"] = f"{tag}_spatial_final"
 
-        config_file = config_dir / f"spatial_{tag}.yaml"
+        config_file = output_root / f"spatial_{tag}.yaml"
         with config_file.open("w", encoding="utf-8") as handle:
             yaml.safe_dump(spatial_config, handle, allow_unicode=True, sort_keys=False)
 
         slurm["index"] = index
         sbatch_file = slurm["sbatch_dir"] / f"{tag}.sbatch"
-        write_sbatch(sbatch_file, tag, config_file, slurm, model_policy)
+        write_sbatch(sbatch_file, tag, config_file, slurm)
         sbatch_files.append(sbatch_file)
 
         row = {

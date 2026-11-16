@@ -8,7 +8,7 @@ fermipy:
 
   data:
     evfile: ../products___ENERGY_LABEL__/__ANALYSIS_NAME___gti.fits
-    scfile: ../rawdata/spacecraft.fits  # CHANGE ME: actual SC*.fits filename
+    scfile: "../rawdata/*SC*.fits"  # Must match exactly one spacecraft FITS
     ltcube: ../shared/__TARGET___ltcube.fits
 
   binning:
@@ -24,9 +24,8 @@ fermipy:
     zmax: 90
     evclass: 128
     evtype: 3
-    # tmin/tmax are optional. Uncomment to impose a specific MET interval.
-    # tmin: 0
-    # tmax: 0
+    tmin: null                 # CHANGE ME: required start time (Fermi MET seconds)
+    tmax: null                 # CHANGE ME: required stop time (Fermi MET seconds)
     filter: 'DATA_QUAL>0 && LAT_CONFIG==1'
     roicut: 'no'
 
@@ -39,7 +38,7 @@ fermipy:
     # CHANGE ME if your shared Fermi data directory differs.
     galdiff: ~/data/fermi/gll_iem_v07.fits
     isodiff: ~/data/fermi/iso_P8R3_SOURCE_V3_v1.txt
-    catalogs:
+    catalogs:  # Replaced by spatial-grid with the generated model for each combination.
       - ../shared/__TARGET___model_16yr.xml
 
   optimizer:
@@ -66,12 +65,12 @@ fermipy:
     dtheta_max: 1.0             # degrees
     nstep: 20
 
-output: ../products___ENERGY_LABEL__/spatial___TARGET__
+output: ../products___ENERGY_LABEL__/spatial___TARGET__  # Replaced by spatial-grid with the combination output directory.
 outputs:
-  model_name: __TARGET___spatial_final
-  region_file: __TARGET__.reg
+  model_name: __TARGET___spatial_final  # Replaced by spatial-grid with <tag>_spatial_final.
+  region_file: __TARGET__.reg  # Replaced by spatial-grid with <tag>.reg.
 
-sources:
+sources:  # Replaced by spatial-grid with the sources and models in each combination.
   # This exact name must exist in the input XML. Choose PointSource,
   # RadialGaussian, or RadialDisk and adjust the matching block below.
   - name: __TARGET__

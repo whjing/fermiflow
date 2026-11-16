@@ -7,6 +7,7 @@ base:
   input_model: ../shared/__TARGET___model_16yr.xml
   spatial_template: ../configs/spatial___TARGET_____ENERGY_LABEL__.yaml
   output_root: ../products___ENERGY_LABEL__/spatial_grid
+  # Applied when writing each <tag>_spatial.xml.
   # model_policy: ../configs/model_policy_spatial.yaml
 
 sources:
