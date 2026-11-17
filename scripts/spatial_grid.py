@@ -59,9 +59,10 @@ def parse_args():
         help="Rank completed gtlike jobs using manifest-recorded stable logs.",
     )
     parser.add_argument("--reference", help="Reference model tag for Δk and ΔAIC.")
+    parser.add_argument("--latex", type=Path, help="Export AASTeX table rows to a .tex file.")
     args = parser.parse_args()
-    if args.reference and not args.compare_likelihood:
-        parser.error("--reference requires --compare-likelihood")
+    if (args.reference or args.latex) and not args.compare_likelihood:
+        parser.error("--reference and --latex require --compare-likelihood")
     return args
 
 
@@ -761,7 +762,69 @@ def print_optional_source_tests(rows, source_names):
                 )
 
 
-def compare_likelihood(config_path, reference_tag=None):
+def spatial_table_values(source, model):
+    missing = r"\ldots"
+    extension = "---" if model == "point" else missing
+    if source is None:
+        return missing, missing, extension
+    try:
+        spatial, parameters, ra, dec = source_spatial(source)
+        ra *= float(parameters["RA"].get("scale", "1"))
+        dec *= float(parameters["DEC"].get("scale", "1"))
+        radius = source_r68(spatial, parameters)
+        if radius is not None:
+            width = "Sigma" if spatial.get("type") == "RadialGaussian" else "Radius"
+            extension = "{:.4f}".format(radius * float(parameters[width].get("scale", "1")))
+    except (TypeError, ValueError):
+        return missing, missing, extension
+    return f"{ra:.5f}", f"{dec:.5f}", extension
+
+
+def write_likelihood_latex(path, rows, source_names, reference):
+    def label(name, model):
+        escaped = re.sub(r"([&#%_$\{\}])", r"\\\1", name)
+        if model == "point":
+            return r"\texttt{" + escaped + "}"
+        return {"gaussian": "Gaussian", "disk": "Disk"}[model]
+
+    groups = {}
+    for row in rows:
+        components = [(name, row[name]) for name in source_names if row.get(name) in MODEL_TYPES]
+        groups.setdefault(len(components), []).append((row, components))
+
+    missing = r"\ldots"
+    headings = {0: "Background only", 1: "Single-source", 2: "Two-source", 3: "Three-source"}
+    lines = []
+    for count, entries in sorted(groups.items()):
+        if lines:
+            lines.append(r"\hline")
+        heading = headings.get(count, f"{count}-source")
+        group = rf"\multirow{{{max(count, 1) * len(entries)}}}{{*}}{{{heading}}}"
+        for row, components in entries:
+            labels = [label(name, model) for name, model in components]
+            delta_ts = 2 * (reference["nll"] - row["nll"]) if reference else None
+            stats = [
+                f"{row['nll']:.2f}", f"{delta_ts:.2f}" if delta_ts is not None else missing,
+                str(row.get("delta_k", missing)),
+                f"{row['delta_aic']:.2f}" if "delta_aic" in row else missing,
+            ]
+            for index, (name, model) in enumerate(components or [("", "")]):
+                ra, dec, radius = row.get("latex_spatial", {}).get(
+                    name, (missing, missing, "---" if model == "point" else missing)
+                )
+                cells = [
+                    group if index == 0 else "",
+                    (" + ".join(labels) or "Background only") if index == 0 else "",
+                    labels[index] if labels else "---", ra, dec, radius,
+                    *([rf"\({value}\)" for value in stats] if index == 0 else [""] * 4),
+                ]
+                lines.append(" & ".join(cells) + r" \\")
+            group = ""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def compare_likelihood(config_path, reference_tag=None, latex_path=None):
     """Rank completed gtlike combinations using manifest metadata, not filename rules."""
     base_dir = config_path.parent
     grid = load_grid_config(config_path)
@@ -790,7 +853,14 @@ def compare_likelihood(config_path, reference_tag=None):
         if input_path.endswith("_input.xml"):
             model = Path(input_path[:-len("_input.xml")] + "_minuit.xml")
             try:
-                row["k"] = count_free_parameters(ET.parse(model).getroot())
+                root = ET.parse(model).getroot()
+                row["k"] = count_free_parameters(root)
+                if latex_path is not None:
+                    sources = {source.get("name"): source for source in root.findall("source")}
+                    row["latex_spatial"] = {
+                        name: spatial_table_values(sources.get(name), row[name])
+                        for name in source_names if row.get(name) in MODEL_TYPES
+                    }
             except (OSError, ET.ParseError) as error:
                 print(f"Cannot count free parameters for {row['tag']}: {error}")
         else:
@@ -852,8 +922,15 @@ def compare_likelihood(config_path, reference_tag=None):
         "gtlike_log",
         *source_names,
     ]
+    if latex_path is not None:
+        latex_path = latex_path.expanduser().resolve()
+        if latex_path.suffix != ".tex" or latex_path == output.resolve():
+            raise ValueError("--latex requires a separate .tex output path.")
     write_manifest(output, ordered, fields)
     print(f"\nSaved likelihood comparison: {output}")
+    if latex_path is not None:
+        write_likelihood_latex(latex_path, ordered, source_names, reference)
+        print(f"Saved LaTeX table rows: {latex_path}")
 
 
 def read_ds9_contours(contour_file):
@@ -993,7 +1070,7 @@ def main():
     elif args.prepare_gtlike:
         prepare_gtlike(config_path)
     elif args.compare_likelihood:
-        compare_likelihood(config_path, args.reference)
+        compare_likelihood(config_path, args.reference, args.latex)
     else:
         generate_grid(config_path)
 

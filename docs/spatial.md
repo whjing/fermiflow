@@ -193,6 +193,8 @@ fermiflow spatial-grid --config ../configs/spatial_grid.yaml --compare-likelihoo
 
 指定基准时，可加 `--reference <tag>`，或在 grid YAML 中设置 `comparison.reference`。命令行优先，默认使用可计算 AIC 的完成模型中 AIC 最低的一项。终端和 CSV 输出 `k`、`delta_k` 和 `delta_aic`。`k` 从每个组合最终 MINUIT XML 的 `free="1"` 计数，表示最终 gtlike 拟合的自由参数数目。此前定位或延展拟合中优化、在最终 XML 中固定的空间参数不计入。缺少可读的 MINUIT XML 时该行的 `k` 和 AIC 差值不可用。
 
+加上 `--latex spatial_model_rows.tex` 可导出 AASTeX 表格数据行。把结果放在 `\startdata` 和 `\enddata` 之间，并加载 `multirow`。LaTeX 表的 ΔTS、Δk 和 ΔAIC 使用同一基准。
+
 比较器只读取 manifest 中记录的 `<tag>/gtlike.log`，并且只纳入包含 `[DONE] gtlike (MINUIT) finished` 的任务。它输出按 \(-\log L\) 排序的表、相对最佳模型的
 
 \[
