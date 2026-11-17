@@ -970,7 +970,7 @@ def plot_grid(config_path):
                         color="cyan",
                         fontsize=7,
                     )
-        axis.set_title(row["tag"], fontsize=8)
+        axis.set_title(row["tag"], fontsize=12)
         axis.coords[0].set_axislabel("RA")
         axis.coords[1].set_axislabel("Dec")
         axis.coords[0].set_ticklabel(size=7)
