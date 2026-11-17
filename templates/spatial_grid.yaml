@@ -46,6 +46,7 @@ gtlike:
     log_dir: ../logs/gtlike_grid
 
 comparison:
+  # reference: my_target-point-extend-gaussian  # Optional exact tag; defaults to lowest AIC
   output: ../products___ENERGY_LABEL__/spatial_grid/likelihood_comparison.csv
 
 # Optional common TS-map plot after spatial jobs finish.

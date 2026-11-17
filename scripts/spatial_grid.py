@@ -20,7 +20,12 @@ from pathlib import Path
 
 import yaml
 
-from edit_model import apply_model_policy, apply_model_policy_to_sources, load_model_policy
+from edit_model import (
+    apply_model_policy,
+    apply_model_policy_to_sources,
+    count_free_parameters,
+    load_model_policy,
+)
 
 
 MODEL_TYPES = {
@@ -53,7 +58,11 @@ def parse_args():
         action="store_true",
         help="Rank completed gtlike jobs using manifest-recorded stable logs.",
     )
-    return parser.parse_args()
+    parser.add_argument("--reference", help="Reference model tag for Δk and ΔAIC.")
+    args = parser.parse_args()
+    if args.reference and not args.compare_likelihood:
+        parser.error("--reference requires --compare-likelihood")
+    return args
 
 
 def resolve_path(value, base_dir):
@@ -752,7 +761,7 @@ def print_optional_source_tests(rows, source_names):
                 )
 
 
-def compare_likelihood(config_path):
+def compare_likelihood(config_path, reference_tag=None):
     """Rank completed gtlike combinations using manifest metadata, not filename rules."""
     base_dir = config_path.parent
     grid = load_grid_config(config_path)
@@ -773,17 +782,51 @@ def compare_likelihood(config_path):
         print("No completed gtlike logs are available yet.")
         return
 
+    comparison = grid.get("comparison", {})
+    reference_tag = reference_tag or comparison.get("reference")
+    for row in completed:
+        row["k"] = None
+        input_path = row.get("reloc_input_model", "")
+        if input_path.endswith("_input.xml"):
+            model = Path(input_path[:-len("_input.xml")] + "_minuit.xml")
+            try:
+                row["k"] = count_free_parameters(ET.parse(model).getroot())
+            except (OSError, ET.ParseError) as error:
+                print(f"Cannot count free parameters for {row['tag']}: {error}")
+        else:
+            print(f"No relocated input path for {row['tag']}; k is unavailable.")
+
+    with_k = [row for row in completed if row["k"] is not None]
+    if reference_tag:
+        reference = next((row for row in with_k if row["tag"] == reference_tag), None)
+        if reference is None:
+            raise ValueError(f"Reference model must be completed and have a readable MINUIT XML: {reference_tag}")
+    else:
+        reference = min(with_k, key=lambda row: row["nll"] + row["k"], default=None)
+    print(f"AIC reference: {reference['tag'] if reference else 'unavailable'}")
+
     best = min(row["nll"] for row in completed)
     ordered = sorted(completed, key=lambda item: item["nll"])
     print("\nAll completed models")
     print("--------------------")
-    print(f"{'rank':>4}  {'model':<58}  {'-logL':>15}  {'ΔTS from best':>14}")
+    print(
+        f"{'rank':>4}  {'model':<58}  {'-logL':>15}  {'ΔTS from best':>14}  "
+        f"{'k':>5}  {'Δk':>5}  {'ΔAIC':>10}"
+    )
     for rank, row in enumerate(ordered, start=1):
         row["rank"] = rank
         row["delta_ts_from_best"] = 2.0 * (row["nll"] - best)
+        k_text = "N/A" if row["k"] is None else str(row["k"])
+        delta_k_text = delta_aic_text = "N/A"
+        if reference is not None and row["k"] is not None:
+            delta_k = row["k"] - reference["k"]
+            delta_aic = 2.0 * (delta_k + row["nll"] - reference["nll"])
+            row.update(delta_k=delta_k, delta_aic=delta_aic, aic_reference=reference["tag"])
+            delta_k_text = str(delta_k)
+            delta_aic_text = f"{delta_aic:.2f}"
         print(
             f"{rank:4d}  {row['tag']:<58}  {row['nll']:15.2f}  "
-            f"{row['delta_ts_from_best']:14.2f}"
+            f"{row['delta_ts_from_best']:14.2f}  {k_text:>5}  {delta_k_text:>5}  {delta_aic_text:>10}"
         )
 
     print_source_comparisons(ordered, source_names)
@@ -791,7 +834,6 @@ def compare_likelihood(config_path):
     print("----------------------------------")
     print_optional_source_tests(ordered, source_names)
 
-    comparison = grid.get("comparison", {})
     output = resolve_path(
         comparison.get("output", output_root / "likelihood_comparison.csv"), base_dir
     )
@@ -801,6 +843,10 @@ def compare_likelihood(config_path):
         "tag",
         "nll",
         "delta_ts_from_best",
+        "k",
+        "delta_k",
+        "delta_aic",
+        "aic_reference",
         "complete",
         "status",
         "gtlike_log",
@@ -947,7 +993,7 @@ def main():
     elif args.prepare_gtlike:
         prepare_gtlike(config_path)
     elif args.compare_likelihood:
-        compare_likelihood(config_path)
+        compare_likelihood(config_path, args.reference)
     else:
         generate_grid(config_path)
 
