@@ -762,7 +762,42 @@ def print_optional_source_tests(rows, source_names):
                 )
 
 
-def spatial_table_values(source, model):
+def read_spatial_errors(output_dir, name, model):
+    """Read Fermipy's per-source localization or extension FITS table."""
+    if not output_dir:
+        return {}
+    from astropy.io import fits
+
+    kind = "loc" if model == "point" else "ext"
+    suffix = f"{name.lower().replace(' ', '_')}_{kind}.fits"
+    directory = Path(output_dir)
+    path = directory / suffix
+    if not path.is_file():
+        matches = [item for item in directory.glob(f"*_{kind}.fits") if item.name.endswith("_" + suffix)]
+        if len(matches) != 1:
+            return {}
+        path = matches[0]
+
+    try:
+        with fits.open(path) as hdul:
+            table = hdul[f"{kind.upper()}_DATA"].data
+            if len(table) != 1:
+                return {}
+            if "fit_success" in table.names and not table[0]["fit_success"]:
+                return {}
+            if "fit_inbounds" in table.names and not table[0]["fit_inbounds"]:
+                return {}
+            return {
+                key: float(table[0][key])
+                for key in ("ra", "dec", "ra_err", "dec_err", "ext_err_hi", "ext_err_lo", "ext_err")
+                if key in table.names
+            }
+    except (OSError, KeyError, TypeError, ValueError) as error:
+        print(f"Cannot read spatial uncertainties from {path}: {error}")
+        return {}
+
+
+def spatial_table_values(source, model, errors):
     missing = r"\ldots"
     extension = "---" if model == "point" else missing
     if source is None:
@@ -771,13 +806,34 @@ def spatial_table_values(source, model):
         spatial, parameters, ra, dec = source_spatial(source)
         ra *= float(parameters["RA"].get("scale", "1"))
         dec *= float(parameters["DEC"].get("scale", "1"))
+    except (TypeError, ValueError):
+        return missing, missing, extension
+
+    # Attach errors only when the fit product corresponds to the XML center.
+    if not all(math.isclose(value, errors.get(key, math.nan), rel_tol=0, abs_tol=1 / 3600)
+               for key, value in (("ra", ra), ("dec", dec))):
+        errors = {}
+
+    def symmetric(value, key):
+        error = errors.get(key, math.nan)
+        if math.isfinite(error) and error > 0:
+            return rf"\({value:.2f} \pm {error:.2f}\)"
+        return rf"\({value:.2f}\)"
+
+    try:
         radius = source_r68(spatial, parameters)
         if radius is not None:
             width = "Sigma" if spatial.get("type") == "RadialGaussian" else "Radius"
-            extension = "{:.4f}".format(radius * float(parameters[width].get("scale", "1")))
+            radius *= float(parameters[width].get("scale", "1"))
+            hi = errors.get("ext_err_hi", math.nan)
+            lo = errors.get("ext_err_lo", math.nan)
+            if all(math.isfinite(err) and err > 0 for err in (hi, lo)):
+                extension = rf"\({radius:.2f}^{{+{hi:.2f}}}_{{-{lo:.2f}}}\)"
+            else:
+                extension = symmetric(radius, "ext_err")
     except (TypeError, ValueError):
-        return missing, missing, extension
-    return f"{ra:.5f}", f"{dec:.5f}", extension
+        pass
+    return symmetric(ra, "ra_err"), symmetric(dec, "dec_err"), extension
 
 
 def write_likelihood_latex(path, rows, source_names, reference):
@@ -858,7 +914,10 @@ def compare_likelihood(config_path, reference_tag=None, latex_path=None):
                 if latex_path is not None:
                     sources = {source.get("name"): source for source in root.findall("source")}
                     row["latex_spatial"] = {
-                        name: spatial_table_values(sources.get(name), row[name])
+                        name: spatial_table_values(
+                            sources.get(name), row[name],
+                            read_spatial_errors(row.get("output_dir"), name, row[name]),
+                        )
                         for name in source_names if row.get(name) in MODEL_TYPES
                     }
             except (OSError, ET.ParseError) as error:
