@@ -810,7 +810,7 @@ def compare_likelihood(config_path, reference_tag=None):
     print("\nAll completed models")
     print("--------------------")
     print(
-        f"{'rank':>4}  {'model':<58}  {'-logL':>15}  {'ΔTS from best':>14}  "
+        f"{'rank':>4}  {'model':<40}  {'-logL':>15}  {'ΔTS from best':>14}  "
         f"{'k':>5}  {'Δk':>5}  {'ΔAIC':>10}"
     )
     for rank, row in enumerate(ordered, start=1):
