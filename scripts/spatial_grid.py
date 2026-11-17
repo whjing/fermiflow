@@ -825,7 +825,7 @@ def compare_likelihood(config_path, reference_tag=None):
             delta_k_text = str(delta_k)
             delta_aic_text = f"{delta_aic:.2f}"
         print(
-            f"{rank:4d}  {row['tag']:<58}  {row['nll']:15.2f}  "
+            f"{rank:4d}  {row['tag']:<30}  {row['nll']:15.2f}  "
             f"{row['delta_ts_from_best']:14.2f}  {k_text:>5}  {delta_k_text:>5}  {delta_aic_text:>10}"
         )
 
