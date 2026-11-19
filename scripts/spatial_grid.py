@@ -60,9 +60,10 @@ def parse_args():
     )
     parser.add_argument("--reference", help="Reference model tag for Δk and ΔAIC.")
     parser.add_argument("--latex", type=Path, help="Export AASTeX table rows to a .tex file.")
+    parser.add_argument("--csv", type=Path, help="Export per-component spatial results and fit notes to CSV.")
     args = parser.parse_args()
-    if (args.reference or args.latex) and not args.compare_likelihood:
-        parser.error("--reference and --latex require --compare-likelihood")
+    if (args.reference or args.latex or args.csv) and not args.compare_likelihood:
+        parser.error("--reference, --latex and --csv require --compare-likelihood")
     return args
 
 
@@ -783,15 +784,13 @@ def read_spatial_errors(output_dir, name, model):
             table = hdul[f"{kind.upper()}_DATA"].data
             if len(table) != 1:
                 return {}
-            if "fit_success" in table.names and not table[0]["fit_success"]:
-                return {}
-            if "fit_inbounds" in table.names and not table[0]["fit_inbounds"]:
-                return {}
-            return {
+            failed = any(key in table.names and not bool(table[0][key])
+                         for key in ("fit_success", "fit_inbounds"))
+            return {"failed": failed, **{
                 key: float(table[0][key])
                 for key in ("ra", "dec", "ra_err", "dec_err", "ext_err_hi", "ext_err_lo", "ext_err")
                 if key in table.names
-            }
+            }}
     except (OSError, KeyError, TypeError, ValueError) as error:
         print(f"Cannot read spatial uncertainties from {path}: {error}")
         return {}
@@ -809,6 +808,8 @@ def spatial_table_values(source, model, errors):
     except (TypeError, ValueError):
         return missing, missing, extension
 
+    if errors.get("failed"):
+        errors = {}
     # Attach errors only when the fit product corresponds to the XML center.
     if not all(math.isclose(value, errors.get(key, math.nan), rel_tol=0, abs_tol=1 / 3600)
                for key, value in (("ra", ra), ("dec", dec))):
@@ -882,7 +883,34 @@ def write_likelihood_latex(path, rows, source_names, reference):
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def compare_likelihood(config_path, reference_tag=None, latex_path=None):
+
+def write_spatial_csv(path, rows, source_names, reference):
+    """One numeric CSV row per component, with model-level statistics repeated."""
+    records = []
+    for row in rows:
+        components = [(name, row[name]) for name in source_names if row.get(name) in MODEL_TYPES]
+        for name, model in components or [("", "")]:
+            record = dict(tag=row["tag"], component_count=len(components), source=name,
+                          spatial_model=model, nll=row["nll"], k=row.get("k"),
+                          delta_ts=2 * (reference["nll"] - row["nll"]) if reference else "",
+                          delta_k=row.get("delta_k", ""), delta_aic=row.get("delta_aic", ""),
+                          reference=reference["tag"] if reference else "",
+                          notes="; ".join(note for note in row.get("fit_notes", {}).values() if note))
+            values = row.get("latex_spatial", {}).get(name, ("", "", ""))
+            for prefix, value in zip(("ra", "dec", "r68"), values):
+                numbers = re.findall(r"[-+]?\d+(?:\.\d+)?", value)
+                record[prefix] = numbers[0] if numbers else ""
+                record[prefix + "_err_hi"] = numbers[1].lstrip("+-") if len(numbers) > 1 else ""
+                record[prefix + "_err_lo"] = numbers[-1].lstrip("+-") if len(numbers) > 1 else ""
+            records.append(record)
+    fields = ["tag", "component_count", "source", "spatial_model",
+              "ra", "ra_err_hi", "ra_err_lo", "dec", "dec_err_hi", "dec_err_lo",
+              "r68", "r68_err_hi", "r68_err_lo", "nll", "k", "delta_ts", "delta_k",
+              "delta_aic", "reference", "notes"]
+    write_manifest(path, records, fields)
+
+
+def compare_likelihood(config_path, reference_tag=None, latex_path=None, csv_path=None):
     """Rank completed gtlike combinations using manifest metadata, not filename rules."""
     base_dir = config_path.parent
     grid = load_grid_config(config_path)
@@ -913,8 +941,18 @@ def compare_likelihood(config_path, reference_tag=None, latex_path=None):
             try:
                 root = ET.parse(model).getroot()
                 row["k"] = count_free_parameters(root)
-                if latex_path is not None:
+                if latex_path is not None or csv_path is not None:
                     sources = {source.get("name"): source for source in root.findall("source")}
+                    row["fit_notes"] = {}
+                    for name in source_names:
+                        if row.get(name) not in MODEL_TYPES:
+                            continue
+                        errors = read_spatial_errors(row.get("output_dir"), name, row[name])
+                        row["fit_notes"][name] = (
+                            f"{name}: {'localization' if row[name] == 'point' else 'extension'} fit failed or out of bounds"
+                            if errors.get("failed") else
+                            ("" if errors else f"{name}: spatial fit status unavailable")
+                        )
                     row["latex_spatial"] = {
                         name: spatial_table_values(
                             sources.get(name), row[name],
@@ -989,6 +1027,12 @@ def compare_likelihood(config_path, reference_tag=None, latex_path=None):
             raise ValueError("--latex requires a separate .tex output path.")
     write_manifest(output, ordered, fields)
     print(f"\nSaved likelihood comparison: {output}")
+    if csv_path is not None:
+        csv_path = csv_path.expanduser().resolve()
+        if csv_path.suffix.lower() != ".csv" or csv_path == output.resolve():
+            raise ValueError("--csv requires a separate .csv output path.")
+        write_spatial_csv(csv_path, ordered, source_names, reference)
+        print(f"Saved spatial table CSV: {csv_path}")
     if latex_path is not None:
         write_likelihood_latex(latex_path, ordered, source_names, reference)
         print(f"Saved LaTeX table rows: {latex_path}")
@@ -1131,7 +1175,7 @@ def main():
     elif args.prepare_gtlike:
         prepare_gtlike(config_path)
     elif args.compare_likelihood:
-        compare_likelihood(config_path, args.reference, args.latex)
+        compare_likelihood(config_path, args.reference, args.latex, args.csv)
     else:
         generate_grid(config_path)
 

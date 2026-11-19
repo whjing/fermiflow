@@ -239,3 +239,25 @@ fermiflow spatial-grid --config ../configs/spatial_grid.yaml --plot
 比较模型时保留相同的数据选择与背景策略。`--compare-likelihood` 给出拟合差值，显著性解读还取决于模型是否嵌套以及检验的自由度。
 
 定位失败（`fit_success: false` 或 `fit_inbounds: false`）的点源，region 使用返回结果中有效的候选 `ra`、`dec`，以橙色菱形标记，并以橙色虚线圆显示候选 `pos_r68`；这些是失败拟合的候选结果，不能作为可靠定位误差。缺少有效候选坐标时，保留 ROI 位置、用橙色菱形标记且不画误差圆。成功定位仍用青色十字和黄色虚线圆；延展源仍用青色十字和实线延展圆。失败定位返回有效候选坐标时，也会更新 Fermipy 的 ROI 和 likelihood 空间模型，再重新拟合，因此最终 XML 以及后续 prepare-gtlike 的输入 XML 使用相同候选位置。若失败结果缺少有效坐标，任务停止，避免静默沿用原位置。
+
+### 导出空间结果 CSV，再转换成 TeX
+
+```bash
+fermiflow spatial-grid --config ../configs/spatial_grid_2GeV.yaml \
+  --compare-likelihood --reference g328-point-extend-gaussian-pt-point \
+  --csv ../products_2GeV/spatial_grid_2GeV/results.csv
+```
+
+`--csv` 每个源输出一行：模型 tag、源名、形态、RA/Dec 及误差、延展 r68 及上下误差（单位均为度）、负 log likelihood、k、相对指定基准的有符号 delta_ts、delta_k、delta_aic、reference 和 notes。模型统计量在该模型的每个源行重复。位置和误差与原 TeX 输出一致，保留两位小数。FITS 中标记失败或越界的结果不附加误差，notes 写明具体源和定位/延展失败；缺少结果文件时标记状态不可用，不当成成功。该导出不会重新拟合。
+
+不传 `--latex` 就不会生成 TeX。原本的 `likelihood_comparison.csv` 仍正常输出。
+
+需要 TeX 时，可独立转换（只使用 Python 标准库）：
+
+```bash
+python -m scripts.csv_to_tex \
+  ../products_2GeV/spatial_grid_2GeV/results.csv \
+  ../products_2GeV/spatial_grid_2GeV/results.tex
+```
+
+生成九列表格数据行，放到 AASTeX 的 `\startdata` 和 `\enddata` 之间；需要 `multirow`。备注保存在 TeX 的 `% Notes:` 注释中，不额外增加表格列。也可单独复制 `scripts/csv_to_tex.py`，运行 `python csv_to_tex.py results.csv results.tex`。
