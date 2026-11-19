@@ -39,7 +39,7 @@ fermiflow run --config ../configs/fermitools_project.yaml --mode prepare
 | 页面 | 内容 |
 | --- | --- |
 | [安装与更新](docs/installation.md) | 本地安装、超算更新、开发流程 |
-| [快速开始](docs/quickstart.md) | 项目布局、数据下载、基准拟合与 TS map |
+| [快速开始](docs/quickstart.md) | 项目布局、数据下载、基准拟合、TS map 与 tsmap-grid 批量任务 |
 | [模型参数策略](docs/model-policy.md) | XML 参数自由度、邻源半径和 TS 筛选 |
 | [空间模型](docs/spatial.md) | 点源定位、Gaussian / Disk、Slurm 和 likelihood 比较 |
 | [谱与 SED](docs/sed.md) | 全能段 PL / LP、分能段拟合、TS 筛选和绘图 |

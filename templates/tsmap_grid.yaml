@@ -1,0 +1,22 @@
+# All YAML paths are relative to this file. CLI --input-model is relative to cwd.
+project_config: ../configs/fermitools_project.yaml # CHANGE ME: project YAML
+output_dir: ../products___ENERGY_LABEL__/tsmap_grid
+
+slurm:
+  sbatch_dir: ../sbatch/tsmap_grid
+  log_dir: ../logs/tsmap_grid
+  # working_dir: ../scripts
+  # conda_sh: /path/to/miniforge3/etc/profile.d/conda.sh # if conda is not on PATH
+# Each job uses one CPU and activates the fermi environment automatically.
+submit_delay_seconds: 300 # 5 minutes between sbatch submissions
+
+defaults:
+  size: 2.0       # Square map side length in degrees
+  binsz: 0.01     # Pixel size in degrees
+
+tasks:
+  - remove_sources: [] # Complete model: tsmap-res.xml -> tsmap-res.fits
+    size: 3.0
+  - remove_sources: [__TARGET__] # CHANGE ME: exact name in fitted XML
+  - remove_sources: [nearby_source] # CHANGE ME: exact name in fitted XML
+  - remove_sources: [__TARGET__, nearby_source]

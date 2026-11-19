@@ -29,6 +29,7 @@ INIT_TEMPLATES = {
     "project": "fermitools_project.yaml",
     "spatial": "spatial_fit.yaml",
     "spatial-grid": "spatial_grid.yaml",
+    "tsmap-grid": "tsmap_grid.yaml",
     "model-policy": "model_policy.yaml",
     "sed-filter": "sed_filter.yaml",
 }
@@ -97,6 +98,7 @@ def main() -> None:
     subparsers.add_parser("run", help="Run the Fermitools workflow.")
     subparsers.add_parser("spatial", help="Run the Fermipy spatial workflow.")
     subparsers.add_parser("spatial-grid", help="Generate or plot a grid of spatial hypotheses.")
+    subparsers.add_parser("tsmap-grid", help="Generate TS-map XMLs and Slurm submission scripts.")
     subparsers.add_parser("download", help="Download URLs in parallel with wget.")
     subparsers.add_parser("model", help="Create an XML with a parameter-freeing policy.")
     subparsers.add_parser("sed-filter", help="Make TS-filtered SED-bin XML models.")
@@ -112,12 +114,12 @@ def main() -> None:
 
         template = INIT_TEMPLATES[args.mode]
         replacements = None
-        if args.mode in {"spatial", "spatial-grid"}:
+        if args.mode in {"spatial", "spatial-grid", "tsmap-grid"}:
             replacements = spatial_replacements(
                 args.target or "my_target", args.energy_label or "2GeV"
             )
         elif args.target is not None or args.energy_label is not None:
-            init.error("--target and --energy-label are only available for spatial templates")
+            init.error("--target and --energy-label are only available for spatial and tsmap-grid templates")
 
         output = args.config or Path(template)
         write_template(output.expanduser().resolve(), template, replacements)
@@ -127,6 +129,7 @@ def main() -> None:
         "run": "run_fermitools.py",
         "spatial": "fit_spatial.py",
         "spatial-grid": "spatial_grid.py",
+        "tsmap-grid": "tsmap_grid.py",
         "download": "download.sh",
         "model": "edit_model.py",
         "sed-filter": "sed_filter.py",
