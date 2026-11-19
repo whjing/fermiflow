@@ -23,13 +23,6 @@ def write_job(path, tag, project, model, size, binsz, slurm):
         "#SBATCH --open-mode=truncate",
         "", "set -eo pipefail", *conda_activation_lines(slurm),
         "conda activate fermi", f"cd {quote(slurm['working_dir'])}",
-        '# Isolate writable Fermitools parameters for this job.',
-        'task_dir="$(mktemp -d "${TMPDIR:-/tmp}/fermiflow-tsmap.XXXXXX")"',
-        'trap \'rm -rf -- "$task_dir"\' EXIT',
-        'mkdir -p "$task_dir/pfiles"',
-        'original_pfiles="${PFILES:?PFILES is missing after activating fermi}"',
-        'export PFILES="$task_dir/pfiles;${original_pfiles#*;}"',
-        'echo "Job: ${SLURM_JOB_ID:-unknown}; PFILES=$PFILES"',
         f"fermiflow run --config {quote(project)} --mode tsmap "
         f"--input-model {quote(model)} --size {size:g} --binsz {binsz:g} "
         f'--log-name "{tag}_${{SLURM_JOB_ID:-local}}"',

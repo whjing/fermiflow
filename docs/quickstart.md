@@ -167,6 +167,6 @@ bash ../sbatch/tsmap_grid/submit_tsmap.sh
 
 生成器固定模板中全部参数，再按 `tasks[].remove_sources` 删除完整源节点；原模板不改动。不删除源时输出 `tsmap-res.xml/.fits`，删除源时按 YAML 顺序输出 `tsmap-src1-src2.xml/.fits`。XML 和 FITS 均在 `output_dir`，每个任务一个 `.sbatch`，统一提交脚本在 `slurm.sbatch_dir`。生成过程不执行或提交任务，也不预先生成 FITS。重复生成会覆盖同名 XML 和任务脚本，运行时 TS map 也会覆盖同名 FITS，保留不同轮次请使用不同目录。
 
-每个任务固定为 1 CPU、激活 `fermi`，独立设置 `PFILES`，不执行 `punlearn`；如批处理找不到 conda，设置 `slurm.conda_sh`。任务日志在 `slurm.log_dir`，流水线自身日志仍按项目 YAML 配置输出。默认任务工作目录为 YAML 所在目录的同级 `scripts/`，也可设置 `slurm.working_dir`。YAML 路径相对于 YAML，命令行输入 XML 路径相对于执行目录。
+每个任务固定为 1 CPU、激活 `fermi`，不执行 `punlearn`；如批处理找不到 conda，设置 `slurm.conda_sh`。任务日志在 `slurm.log_dir`，流水线自身日志仍按项目 YAML 配置输出。默认任务工作目录为 YAML 所在目录的同级 `scripts/`，也可设置 `slurm.working_dir`。YAML 路径相对于 YAML，命令行输入 XML 路径相对于执行目录。
 
 `defaults.size`（方图边长，度）和 `defaults.binsz`（像素大小，度）可由每个任务覆盖。`submit_delay_seconds` 默认 300，提交脚本在两次 `sbatch` 之间等待 5 分钟，不保证实际调度开始时间间隔。不同源名转换为安全文件名后若重名，或源名不存在，则停止生成并提示。

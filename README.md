@@ -34,6 +34,10 @@ fermiflow run --config ../configs/fermitools_project.yaml --mode prepare
 
 `fermiflow init --help` 列出所有模板。用 `--mode` 选择模板，用 `--config` 指定输出路径。省略 `--config` 时，模板以默认文件名写入当前目录。
 
+## Grid 对照模型
+
+`spatial-grid` 支持受检源全部为 `N` 的背景对照组合：跳过空间拟合，直接通过 `--prepare-gtlike` 生成 gtlike 输入和任务，完成后一起比较 likelihood/AIC。仅删除 YAML 列出的受检源，保留其他背景源。参见[全 N 对照模型](docs/spatial.md#全部受检源缺失的对照组合)。
+
 ## Wiki
 
 | 页面 | 内容 |

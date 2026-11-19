@@ -267,3 +267,11 @@ python -m scripts.csv_to_tex \
 新生成的空间任务使用 `slurm.log_dir/<tag>_spatial.log`，gtlike 任务使用 `slurm.log_dir/<tag>_like.log`。Slurm 将标准输出和错误写入同一个文件，显式设置 `--open-mode=truncate`，每次任务启动时覆盖旧任务日志。gtlike 不再使用 `tee` 复制第二份日志。manifest 的 `gtlike_log` 指向这份固定 Slurm 日志，比较器仍要求正常完成标记，失败或未完成的运行不参与比较。同一组合不要同时运行两次。现有 Fermitools/Fermipy 程序自身的日志机制不受此修改影响。
 
 空间配置、输入模型、任务脚本统一命名为 `<tag>_spatial.yaml`、`<tag>_spatial.xml`、`<tag>_spatial.sbatch`；统一提交脚本为 `submit_spatial.sh`、`submit_like.sh` 和 `submit_tsmap.sh`。旧脚本不会自动改写，需要重新生成；旧 manifest 仍读取原来记录的路径。此次不调整输出目录层级或 region 存放位置。
+
+### 全部受检源缺失的对照组合
+
+当一个组合的全部受检源都是 `N` 时，manifest 保留该组合并标记 `spatial_status=skipped_all_absent`。生成器仍写出删源 XML 供检查，但不生成该组合的空间 YAML、空间 sbatch 或 region，不加入 `submit_spatial.sh`。
+
+运行相同的 `--prepare-gtlike` 命令时，该组合不需要 `_spatial_final.xml`：直接复制 `gtlike.template_model`，删除受检源，保留背景源参数，并应用相同的 `gtlike.model_policy`。生成 `<tag>_reloc_input.xml`、`<tag>_like.sbatch`，加入 `submit_like.sh`。最终 gtlike 重新拟合背景，likelihood/AIC 比较正常包含该组合；空间图不画此组合。部分源为 N、其他受检源存在的组合仍须完成空间拟合。
+
+例如一个源设置 `include: [true, false]`、`models: [point, gaussian, disk]`，生成 P/G/D/N 四组，但只有 P/G/D 三个空间任务；N 组可直接 prepare-gtlike。现有旧 manifest 也按各源的 `absent` 字段识别全 N，不依赖新状态字段。

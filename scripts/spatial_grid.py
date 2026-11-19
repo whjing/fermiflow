@@ -364,7 +364,7 @@ def build_relocated_input(template_model, spatial_model, output_model, row, sour
     """
     template_tree = ET.parse(template_model)
     template_root = template_tree.getroot()
-    fitted_root = ET.parse(spatial_model).getroot()
+    fitted_root = ET.parse(spatial_model).getroot() if spatial_model is not None else ET.Element("source_library")
     template_sources = {
         source.get("name"): source for source in template_root.findall("source")
     }
@@ -528,39 +528,43 @@ def generate_grid(config_path):
         ET.indent(tree, space="  ")
         tree.write(model_path, encoding="UTF-8", xml_declaration=True)
 
-        spatial_config = copy.deepcopy(spatial_template)
-        spatial_config.setdefault("fermipy", {}).setdefault("model", {})["catalogs"] = [str(model_path)]
+        all_absent = not any(choice["include"] for choice in choices)
         output_dir = output_root / tag
-        spatial_config["output"] = str(output_dir)
-        spatial_config["sources"] = grid_sources(source_configs, choices)
-        spatial_config.setdefault("outputs", {})
-        # A tag-specific region filename makes copied/collected regions
-        # unambiguous even outside their individual output directories.
-        region_name = f"{tag}.reg"
-        spatial_config["outputs"]["region_file"] = region_name
-        # The final XML is also tag-specific so it remains identifiable after
-        # copying it outside this hypothesis directory.
-        spatial_config["outputs"]["model_name"] = f"{tag}_spatial_final"
-
         config_file = output_root / f"{tag}_spatial.yaml"
-        with config_file.open("w", encoding="utf-8") as handle:
-            yaml.safe_dump(spatial_config, handle, allow_unicode=True, sort_keys=False)
-
-        slurm["index"] = index
         sbatch_file = slurm["sbatch_dir"] / f"{tag}_spatial.sbatch"
-        write_sbatch(sbatch_file, tag, config_file, slurm)
-        sbatch_files.append(sbatch_file)
+        region_name = f"{tag}.reg"
+        if not all_absent:
+            spatial_config = copy.deepcopy(spatial_template)
+            spatial_config.setdefault("fermipy", {}).setdefault("model", {})["catalogs"] = [str(model_path)]
+            output_dir = output_root / tag
+            spatial_config["output"] = str(output_dir)
+            spatial_config["sources"] = grid_sources(source_configs, choices)
+            spatial_config.setdefault("outputs", {})
+            # A tag-specific region filename makes copied/collected regions
+            # unambiguous even outside their individual output directories.
+            region_name = f"{tag}.reg"
+            spatial_config["outputs"]["region_file"] = region_name
+            # The final XML is also tag-specific so it remains identifiable after
+            # copying it outside this hypothesis directory.
+            spatial_config["outputs"]["model_name"] = f"{tag}_spatial_final"
 
+            config_file = output_root / f"{tag}_spatial.yaml"
+            with config_file.open("w", encoding="utf-8") as handle:
+                yaml.safe_dump(spatial_config, handle, allow_unicode=True, sort_keys=False)
+
+            slurm["index"] = index
+            sbatch_file = slurm["sbatch_dir"] / f"{tag}_spatial.sbatch"
+            write_sbatch(sbatch_file, tag, config_file, slurm)
+            sbatch_files.append(sbatch_file)
         row = {
             "tag": tag,
             "input_model": str(model_path),
-            "spatial_config": str(config_file),
+            "spatial_config": "" if all_absent else str(config_file),
             "output_dir": str(output_dir),
-            "spatial_final_model": str(
-                output_dir / f"{spatial_config['outputs']['model_name']}.xml"
-            ),
-            "region_file": str(output_dir / region_name),
-            "sbatch_file": str(sbatch_file),
+            "spatial_final_model": "" if all_absent else str(output_dir / f"{tag}_spatial_final.xml"),
+            "region_file": "" if all_absent else str(output_dir / region_name),
+            "sbatch_file": "" if all_absent else str(sbatch_file),
+            "spatial_status": "skipped_all_absent" if all_absent else "prepared",
             "model_policy": "" if model_policy is None else str(model_policy),
         }
         row.update(
@@ -576,6 +580,7 @@ def generate_grid(config_path):
         "tag",
         "input_model",
         "spatial_config",
+        "spatial_status",
         "output_dir",
         "spatial_final_model",
         "region_file",
@@ -625,23 +630,30 @@ def prepare_gtlike(config_path):
     prepared = 0
 
     for index, row in enumerate(rows):
-        expected_final_model = Path(
-            row.get("spatial_final_model")
-            or Path(row["output_dir"]) / f"{row['tag']}_spatial_final.xml"
+        all_absent = bool(grid.get("sources")) and all(
+            row.get(item["name"]) == "absent" for item in grid["sources"]
         )
-        final_model = expected_final_model
-        if not final_model.is_file():
-            # Support grid runs made before final XML names were normalized:
-            # Fermipy wrote names such as <tag>_spatial_final_00.xml.
-            candidates = sorted(
-                expected_final_model.parent.glob(f"{expected_final_model.stem}_*.xml"),
-                key=lambda path: path.stat().st_mtime,
+        final_model = None
+        if all_absent:
+            row["spatial_status"] = "skipped_all_absent"
+        else:
+            expected_final_model = Path(
+                row.get("spatial_final_model")
+                or Path(row["output_dir"]) / f"{row['tag']}_spatial_final.xml"
             )
-            if candidates:
-                final_model = candidates[-1]
-        if not final_model.is_file():
-            row["gtlike_status"] = "spatial_pending"
-            continue
+            final_model = expected_final_model
+            if not final_model.is_file():
+                # Support grid runs made before final XML names were normalized:
+                # Fermipy wrote names such as <tag>_spatial_final_00.xml.
+                candidates = sorted(
+                    expected_final_model.parent.glob(f"{expected_final_model.stem}_*.xml"),
+                    key=lambda path: path.stat().st_mtime,
+                )
+                if candidates:
+                    final_model = candidates[-1]
+            if not final_model.is_file():
+                row["gtlike_status"] = "spatial_pending"
+                continue
 
         output_dir = Path(row["output_dir"])
         reloc_input = output_dir / f"{row['tag']}_reloc_input.xml"
@@ -673,7 +685,7 @@ def prepare_gtlike(config_path):
         )
         row.update(
             {
-                "spatial_final_model": str(final_model),
+                "spatial_final_model": "" if final_model is None else str(final_model),
                 "reloc_input_model": str(reloc_input),
                 "gtlike_log": str(job_log),
                 "gtlike_sbatch": str(sbatch_file),
@@ -685,12 +697,12 @@ def prepare_gtlike(config_path):
 
     fields = extend_fieldnames(
         rows,
-        ["reloc_input_model", "gtlike_log", "gtlike_sbatch", "gtlike_status"],
+        ["spatial_status", "reloc_input_model", "gtlike_log", "gtlike_sbatch", "gtlike_status"],
     )
     write_manifest(manifest, rows, fields)
     submit_script = slurm["sbatch_dir"] / "submit_like.sh"
     write_submit_script(submit_script, sbatch_files)
-    print(f"Prepared {prepared} gtlike jobs from completed spatial fits.")
+    print(f"Prepared {prepared} gtlike jobs (completed spatial fits or all-absent controls).")
     print(f"Updated manifest: {manifest}")
     print(f"Submit script   : {submit_script}")
 
@@ -1093,7 +1105,8 @@ def plot_grid(config_path):
     if not manifest.is_file():
         raise FileNotFoundError(f"Grid manifest not found: {manifest}")
     with manifest.open(encoding="utf-8") as handle:
-        rows = [row for row in csv.DictReader(handle) if Path(row["region_file"]).is_file()]
+        rows = [row for row in csv.DictReader(handle)
+                if row.get("region_file") and Path(row["region_file"]).is_file()]
     if not rows:
         raise SystemExit("No completed region files are listed in the grid manifest.")
 
