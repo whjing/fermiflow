@@ -56,6 +56,8 @@ comparison:
 #   tsmap: ../products___ENERGY_LABEL__/__ANALYSIS_NAME___tsmap.fits
 #   radio_contours: ../shared/regions/__TARGET__-radio.ctr
 #   output: ../figures/__TARGET___spatial_grid.png
+#   center: {ra: 0.0, dec: 0.0} # Optional ICRS degrees; set together with size
+#   size: 2.0                  # Sky field side length in degrees; omit both for full TS map
 #   ncols: 4
 #   cmap: inferno
 #   power_gamma: 1.0

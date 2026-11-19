@@ -60,7 +60,8 @@ def write_ds9_regions(
     Extended sources retain their fitted r68 circle.  Point sources retain a
     dashed localisation-r68 circle.  In both cases the source name appears
     only beside the centre marker. Failed point localizations use an orange
-    diamond at the returned candidate position, without updating the ROI model.
+    diamond at the returned candidate position. The fitting workflow also adopts
+    valid failed-localization candidates in the ROI before writing products.
     """
     localization_results = localization_results or {}
     extension_results = extension_results or {}
@@ -128,7 +129,7 @@ def write_ds9_regions(
                 if pos_r68 is not None:
                     handle.write(
                         f"circle({ra:.6f},{dec:.6f},{pos_r68:.6f}d) "
-                        f"# color={'orange' if failed else 'yellow'} dash=1\n"
+                        f"# color={'orange' if failed else 'yellow'} dash=1 text={{}}\n"
                     )
                 else:
                     logger.warning(
@@ -147,7 +148,7 @@ def write_ds9_regions(
                 else:
                     handle.write(
                         f"circle({ra:.6f},{dec:.6f},{r68:.6f}d) "
-                        "# color=cyan\n"
+                        "# color=cyan text={}\n"
                     )
 
             handle.write(

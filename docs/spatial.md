@@ -275,3 +275,9 @@ python -m scripts.csv_to_tex \
 运行相同的 `--prepare-gtlike` 命令时，该组合不需要 `_spatial_final.xml`：直接复制 `gtlike.template_model`，删除受检源，保留背景源参数，并应用相同的 `gtlike.model_policy`。生成 `<tag>_reloc_input.xml`、`<tag>_like.sbatch`，加入 `submit_like.sh`。最终 gtlike 重新拟合背景，likelihood/AIC 比较正常包含该组合；空间图不画此组合。部分源为 N、其他受检源存在的组合仍须完成空间拟合。
 
 例如一个源设置 `include: [true, false]`、`models: [point, gaussian, disk]`，生成 P/G/D/N 四组，但只有 P/G/D 三个空间任务；N 组可直接 prepare-gtlike。现有旧 manifest 也按各源的 `absent` 字段识别全 N，不依赖新状态字段。
+
+### 指定空间组合图的视野
+
+`plot` 可选设置 `center: {ra: 238.885, dec: -53.283}` 和 `size: 2.0`（ICRS 坐标及天空视野边长，单位度）。两者一起填写；省略或同时为 null 时，严格显示 TS map 原始全图范围，轮廓或 region 不再自动扩展坐标轴。各子图使用相同视野。该选项只改变显示范围，不修改 FITS 或 region；超出 TS map 的部分没有数据。视野边界在中心的天空偏移坐标系中计算，再投影到原图 WCS。
+
+region 的源名仅写在中心标记旁，定位/延展圆明确设置空文字；绘图器也只给中心点标名称，不给圆标名称。若使用旧 region，重新生成才能更新文件内的标注；绘图本身仍只标中心。

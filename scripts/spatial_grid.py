@@ -1079,6 +1079,34 @@ def region_label(region):
     return re.split(r"\s+(?:pos_)?r68=", text, maxsplit=1)[0]
 
 
+
+def plot_limits(wcs, shape, config):
+    """Return pixel bounds of a sky-centred field, or the original image extent."""
+    center, size = config.get("center"), config.get("size")
+    if center is None and size is None:
+        return (-0.5, shape[1] - 0.5), (-0.5, shape[0] - 0.5)
+    if center is None or size is None:
+        raise ValueError("Set plot.center and plot.size together, or omit both.")
+    import numpy as np
+    from astropy.coordinates import SkyCoord
+    import astropy.units as u
+
+    ra, dec, size = float(center["ra"]), float(center["dec"]), float(size)
+    if not (all(math.isfinite(v) for v in (ra, dec, size))
+            and 0 <= ra < 360 and -90 < dec < 90 and 0 < size < 180):
+        raise ValueError("Invalid plot centre or size in degrees.")
+    # Sample the perimeter in a frame centred on the requested ICRS position.
+    edge = np.linspace(-size / 2, size / 2, 65)
+    lon = np.concatenate([edge, edge, np.full(65, -size / 2), np.full(65, size / 2)])
+    lat = np.concatenate([np.full(65, -size / 2), np.full(65, size / 2), edge, edge])
+    origin = SkyCoord(ra=ra * u.deg, dec=dec * u.deg, frame="icrs")
+    sky = SkyCoord(lon=lon * u.deg, lat=lat * u.deg, frame=origin.skyoffset_frame()).icrs
+    x, y = wcs.world_to_pixel(sky)
+    if not (np.isfinite(x).all() and np.isfinite(y).all()):
+        raise ValueError("Requested plot field cannot be projected onto the TS-map WCS.")
+    return (float(x.min()), float(x.max())), (float(y.min()), float(y.max()))
+
+
 def plot_grid(config_path):
     """Plot completed DS9 regions over the optional TS map declared in YAML."""
     try:
@@ -1126,6 +1154,7 @@ def plot_grid(config_path):
     while data.ndim > 2:
         data = data[0]
     wcs = WCS(header).celestial
+    limits = plot_limits(wcs, data.shape, plot_config)
     contours = read_ds9_contours(radio_file) if radio_file and radio_file.is_file() else []
 
     nrows = math.ceil(len(rows) / ncols)
@@ -1162,9 +1191,11 @@ def plot_grid(config_path):
                         region.center.dec.deg,
                         text,
                         transform=axis.get_transform("world"),
-                        color="cyan",
+                        color=region.visual.get("color", "cyan"),
                         fontsize=7,
                     )
+        axis.set_xlim(*limits[0])
+        axis.set_ylim(*limits[1])
         axis.set_title(row["tag"], fontsize=12)
         axis.coords[0].set_axislabel("RA")
         axis.coords[1].set_axislabel("Dec")
