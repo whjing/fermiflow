@@ -10,6 +10,8 @@ base:
   # Applied when writing each <tag>_spatial.xml.
   # model_policy: ../configs/model_policy_spatial.yaml
 
+# Output tags follow this order: source-P/G/D/N (point/Gaussian/disk/absent).
+# Tags name all combination directories, XML, YAML, region and sbatch files.
 sources:
   # Every source name must exactly match the input XML.
   - name: __TARGET__
@@ -46,7 +48,7 @@ gtlike:
     log_dir: ../logs/gtlike_grid
 
 comparison:
-  # reference: my_target-point-extend-gaussian  # Optional exact tag; defaults to lowest AIC
+  # reference: my_target-P-extend-G  # Optional exact tag; defaults to lowest AIC
   output: ../products___ENERGY_LABEL__/spatial_grid/likelihood_comparison.csv
 
 # Optional common TS-map plot after spatial jobs finish.

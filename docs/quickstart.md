@@ -162,7 +162,7 @@ fermiflow run --config ../configs/fermitools_project.yaml --mode tsmap --input-m
 fermiflow init --mode tsmap-grid --config ../configs/tsmap_grid.yaml --target my_target --energy-label 1GeV
 # 编辑 project_config、output_dir，以及 tasks 中要删除的准确源名。
 fermiflow tsmap-grid --config ../configs/tsmap_grid.yaml --input-model ../products_1GeV/my_target_minuit.xml
-bash ../sbatch/tsmap_grid/submit_tsmap_grid.sh
+bash ../sbatch/tsmap_grid/submit_tsmap.sh
 ```
 
 生成器固定模板中全部参数，再按 `tasks[].remove_sources` 删除完整源节点；原模板不改动。不删除源时输出 `tsmap-res.xml/.fits`，删除源时按 YAML 顺序输出 `tsmap-src1-src2.xml/.fits`。XML 和 FITS 均在 `output_dir`，每个任务一个 `.sbatch`，统一提交脚本在 `slurm.sbatch_dir`。生成过程不执行或提交任务，也不预先生成 FITS。重复生成会覆盖同名 XML 和任务脚本，运行时 TS map 也会覆盖同名 FITS，保留不同轮次请使用不同目录。

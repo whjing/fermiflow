@@ -18,8 +18,9 @@ def write_job(path, tag, project, model, size, binsz, slurm):
     lines = [
         "#!/usr/bin/env bash", f"#SBATCH --job-name={tag}",
         "#SBATCH --nodes=1", "#SBATCH --ntasks=1", "#SBATCH --cpus-per-task=1",
-        f"#SBATCH --output={slurm['log_dir']}/%x-%j.log",
-        f"#SBATCH --error={slurm['log_dir']}/%x-%j.log",
+        f"#SBATCH --output={slurm['log_dir']}/{tag}.log",
+        f"#SBATCH --error={slurm['log_dir']}/{tag}.log",
+        "#SBATCH --open-mode=truncate",
         "", "set -eo pipefail", *conda_activation_lines(slurm),
         "conda activate fermi", f"cd {quote(slurm['working_dir'])}",
         '# Isolate writable Fermitools parameters for this job.',
@@ -92,7 +93,7 @@ def generate_grid(config_path, input_model):
         write_job(job, tag, project, model, size, binsz, slurm)
         jobs.append(job)
         print(f"{tag}: remove={removed}; size={size:g}; binsz={binsz:g}; map={model.with_suffix('.fits')}")
-    submit = slurm["sbatch_dir"] / "submit_tsmap_grid.sh"
+    submit = slurm["sbatch_dir"] / "submit_tsmap.sh"
     lines = ["#!/usr/bin/env bash", "set -euo pipefail", "",
              "# Review the .sbatch files before running this script."]
     for index, job in enumerate(jobs):

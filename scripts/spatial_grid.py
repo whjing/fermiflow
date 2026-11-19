@@ -246,11 +246,12 @@ def set_source_spatial_model(source, model, seed=None):
 
 
 def hypothesis_tag(source_configs, choices):
-    """Use full source names and short model names; omit absent sources entirely."""
+    """Keep every source in YAML order, including absent sources as N."""
+    codes = {"point": "P", "gaussian": "G", "disk": "D"}
     parts = []
     for source_config, choice in zip(source_configs, choices):
-        if choice["include"]:
-            parts.append(f"{file_label(source_config['name'])}-{choice['model']}")
+        code = codes[choice["model"]] if choice["include"] else "N"
+        parts.append(f"{file_label(source_config['name'])}-{code}")
     return "-".join(parts)
 
 
@@ -296,8 +297,8 @@ def write_sbatch(path, tag, config_path, slurm):
         directives.append(f"#SBATCH --nodelist={node}")
     directives.extend(
         [
-            f"#SBATCH --output={slurm['log_dir']}/%x-%j.log",
-            f"#SBATCH --error={slurm['log_dir']}/%x-%j.log",
+            f"#SBATCH --output={slurm['log_dir']}/{tag}_spatial.log",
+            f"#SBATCH --error={slurm['log_dir']}/{tag}_spatial.log",
         ]
     )
     path.write_text(
@@ -305,6 +306,7 @@ def write_sbatch(path, tag, config_path, slurm):
             [
                 "#!/usr/bin/env bash",
                 *directives,
+                "#SBATCH --open-mode=truncate",
                 "",
                 "set -eo pipefail",
                 *conda_activation_lines(slurm),
@@ -423,7 +425,7 @@ def resolve_slurm_config(config, base_dir, default_root, default_name):
 
 
 def write_gtlike_sbatch(path, tag, project_config, input_model, job_log, slurm):
-    """Write one gtlike job that records a deterministic log beside its XML."""
+    """Write one gtlike job that writes directly to the manifest-recorded Slurm log."""
     nodes = slurm.get("nodes", [])
     node = nodes[slurm["index"] % len(nodes)] if nodes else None
     directives = [
@@ -436,8 +438,8 @@ def write_gtlike_sbatch(path, tag, project_config, input_model, job_log, slurm):
         directives.append(f"#SBATCH --nodelist={node}")
     directives.extend(
         [
-            f"#SBATCH --output={slurm['log_dir']}/%x-%j.log",
-            f"#SBATCH --error={slurm['log_dir']}/%x-%j.log",
+            f"#SBATCH --output={job_log}",
+            f"#SBATCH --error={job_log}",
         ]
     )
     path.write_text(
@@ -445,16 +447,14 @@ def write_gtlike_sbatch(path, tag, project_config, input_model, job_log, slurm):
             [
                 "#!/usr/bin/env bash",
                 *directives,
+                "#SBATCH --open-mode=truncate",
                 "",
                 "set -eo pipefail",
                 *conda_activation_lines(slurm),
                 f"conda activate {shlex.quote(str(slurm['conda_env']))}",
                 f"cd {shlex.quote(str(slurm['working_dir']))}",
-                f"mkdir -p {shlex.quote(str(job_log.parent))}",
-                "# tee preserves a stable per-model log; pipefail preserves failures.",
-                f"fermiflow run --config {shlex.quote(str(project_config))} --mode like "
-                f"--input-model {shlex.quote(str(input_model))} 2>&1 | "
-                f"tee {shlex.quote(str(job_log))}",
+                f"exec fermiflow run --config {shlex.quote(str(project_config))} --mode like "
+                f"--input-model {shlex.quote(str(input_model))}",
                 "",
             ]
         ),
@@ -542,12 +542,12 @@ def generate_grid(config_path):
         # copying it outside this hypothesis directory.
         spatial_config["outputs"]["model_name"] = f"{tag}_spatial_final"
 
-        config_file = output_root / f"spatial_{tag}.yaml"
+        config_file = output_root / f"{tag}_spatial.yaml"
         with config_file.open("w", encoding="utf-8") as handle:
             yaml.safe_dump(spatial_config, handle, allow_unicode=True, sort_keys=False)
 
         slurm["index"] = index
-        sbatch_file = slurm["sbatch_dir"] / f"{tag}.sbatch"
+        sbatch_file = slurm["sbatch_dir"] / f"{tag}_spatial.sbatch"
         write_sbatch(sbatch_file, tag, config_file, slurm)
         sbatch_files.append(sbatch_file)
 
@@ -585,7 +585,7 @@ def generate_grid(config_path):
     ]
     write_manifest(manifest, rows, fieldnames)
 
-    submit_script = slurm["sbatch_dir"] / "submit_spatial_grid.sh"
+    submit_script = slurm["sbatch_dir"] / "submit_spatial.sh"
     write_submit_script(submit_script, sbatch_files)
     print(f"Generated {len(rows)} spatial hypotheses.")
     print(f"Manifest     : {manifest}")
@@ -660,9 +660,9 @@ def prepare_gtlike(config_path):
         else:
             print(f"Prepared {row['tag']}: copied template spectrum/background with fitted spatial parameters")
 
-        job_log = output_dir / "gtlike.log"
+        job_log = slurm["log_dir"] / f"{row['tag']}_like.log"
         slurm["index"] = index
-        sbatch_file = slurm["sbatch_dir"] / f"{row['tag']}_gtlike.sbatch"
+        sbatch_file = slurm["sbatch_dir"] / f"{row['tag']}_like.sbatch"
         write_gtlike_sbatch(
             sbatch_file,
             row["tag"],
@@ -688,7 +688,7 @@ def prepare_gtlike(config_path):
         ["reloc_input_model", "gtlike_log", "gtlike_sbatch", "gtlike_status"],
     )
     write_manifest(manifest, rows, fields)
-    submit_script = slurm["sbatch_dir"] / "submit_gtlike_grid.sh"
+    submit_script = slurm["sbatch_dir"] / "submit_like.sh"
     write_submit_script(submit_script, sbatch_files)
     print(f"Prepared {prepared} gtlike jobs from completed spatial fits.")
     print(f"Updated manifest: {manifest}")

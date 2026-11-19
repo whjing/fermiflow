@@ -80,14 +80,14 @@ sources:
 
 `name` 必须严格对应基础 XML 内的源名。`include: [true]` 表示该源始终保留；`include: [true, false]` 会生成“保留”和“完全移除”两类 XML。被移除的源不会出现在文件名中。
 
-生成器使用完整源名，并以 `point`、`gaussian`、`disk` 表示空间模型。例如：
+生成器按 YAML 中 `sources` 的顺序保留完整源名，并以 `P`（point）、`G`（gaussian）、`D`（disk）、`N`（不包含该源）命名。例如：
 
 ```text
-my_target-gaussian-extend-disk-pt-point
-my_target-gaussian-extend-disk
+my_target-G-extend-D-pt-P
+my_target-G-extend-D-pt-N
 ```
 
-第二个组合没有 `pt`，因此不会出现 `pt-absent` 之类的占位名称。包含空格的正式源名在 XML 和 manifest 中保持不变；只在文件路径中把空格替换为连字符。
+第二个组合没有 `pt`，仍保留 `pt-N`。`include`、`models`、`seed` 的写法不变，`N` 仅在配置包含 `include: [false]` 或 `[true, false]` 时生成。包含空格的正式源名在 XML 和 manifest 中保持不变；只在文件路径中把不适合路径的字符替换为连字符。组合 tag 统一用于输出文件夹、XML、YAML、region、sbatch 和后续 gtlike 文件。已有文件不会自动重命名；旧 manifest 的比较和后处理仍按其中记录的 tag、路径读取。新旧实验建议使用不同 `output_root`，避免覆盖清单。
 
 对任意源，省略 `seed:` 时会沿用基础 XML 的 RA/DEC；指定 `seed.ra` 或 `seed.dec` 时只替换给出的坐标分量。对延展模型，`seed.r68` 是 68% 包含半径（deg）：工具会自动写入 Gaussian 的 \(\sigma=r_{68}/1.5096\) 或 Disk 的 \(R=r_{68}/\sqrt{0.68}\)。若基础 XML 是点源、而该组合要求 Gaussian/Disk，则必须提供 `seed.r68`，因为点源本身没有可继承的延展尺度。
 
@@ -104,19 +104,19 @@ fermiflow spatial-grid --config ../configs/spatial_grid.yaml
 ```text
 products_1GeV/spatial_grid/
 ├── <tag>_spatial.xml
-├── spatial_<tag>.yaml
+├── <tag>_spatial.yaml
 ├── <tag>/                         # 每个组合的 Fermipy 输出目录
 └── spatial_grid_manifest.csv
 
 sbatch/spatial_grid/
-├── <tag>.sbatch
-└── submit_spatial_grid.sh
+├── <tag>_spatial.sbatch
+└── submit_spatial.sh
 ```
 
 检查生成的 XML 和 `.sbatch` 后，再手动提交：
 
 ```bash
-bash ../sbatch/spatial_grid/submit_spatial_grid.sh
+bash ../sbatch/spatial_grid/submit_spatial.sh
 ```
 
 `spatial_grid_manifest.csv` 保留 tag、每个源实际使用的模型、XML、单模型 YAML、输出目录、region 文件和 sbatch 文件路径。后续比较 likelihood、TS、定位结果和延展半径时，应从该表读取组合信息，而不是依赖文件名猜测模型。
@@ -133,7 +133,7 @@ sources:
     extension: {}
 ```
 
-这表示对 `my_target` 执行点源定位（`localize`），对 `extend` 执行 Gaussian 延展拟合（`extension`）；空字典表示继承空间模板 YAML 顶层 `localize:`、`extension:` 中的默认设置。组合生成器会以完整 tag 命名最终 XML 与 DS9 region，例如 `my_target-point-extend-gaussian_spatial_final.xml` 和 `my_target-point-extend-gaussian.reg`，便于将文件移出原目录后仍能辨认其模型组合。
+这表示对 `my_target` 执行点源定位（`localize`），对 `extend` 执行 Gaussian 延展拟合（`extension`）；空字典表示继承空间模板 YAML 顶层 `localize:`、`extension:` 中的默认设置。组合生成器会以完整 tag 命名最终 XML 与 DS9 region，例如 `my_target-P-extend-G_spatial_final.xml` 和 `my_target-P-extend-G.reg`，便于将文件移出原目录后仍能辨认其模型组合。
 
 ### 以重新定位后的 XML 批量运行 gtlike
 
@@ -170,7 +170,7 @@ fermiflow spatial-grid --config ../configs/spatial_grid.yaml --prepare-gtlike
 ├── <tag>_reloc_srcmaps.fits       # gtlike 运行后生成
 ├── <tag>_reloc_drmnfb.xml         # gtlike 运行后生成
 ├── <tag>_reloc_minuit.xml         # gtlike 运行后生成
-└── gtlike.log                     # 每个组合稳定、可复查的日志
+└── ...                            # 任务日志统一写入 slurm.log_dir/<tag>_like.log
 ```
 
 Fermipy 本身常把 `write_roi()` 的 XML 临时写为 `<tag>_spatial_final_00.xml`；流水线会在空间拟合成功后自动规范化为 `<tag>_spatial_final.xml`。对于已在旧版本流水线完成的任务，`--prepare-gtlike` 也会自动识别最新的 `_00.xml` 文件并记录其实际路径。
@@ -180,7 +180,7 @@ Fermipy 本身常把 `write_roi()` 的 XML 临时写为 `<tag>_spatial_final_00.
 该步骤只为已完成的 spatial 结果写入 gtlike `.sbatch`，不会自动提交：
 
 ```bash
-bash ../sbatch/gtlike_grid/submit_gtlike_grid.sh
+bash ../sbatch/gtlike_grid/submit_like.sh
 ```
 
 每个任务会针对自己的 `_reloc_input.xml` 重新生成 source maps，再依次运行 DRMNFB 和 MINUIT；不同空间模板之间不能复用同一个 `srcmaps.fits`。
@@ -195,7 +195,7 @@ fermiflow spatial-grid --config ../configs/spatial_grid.yaml --compare-likelihoo
 
 加上 `--latex spatial_model_rows.tex` 可导出 AASTeX 表格数据行。把结果放在 `\startdata` 和 `\enddata` 之间，并加载 `multirow`。数据行包含九列，模型组合之间用横线分隔。LaTeX 表的 ΔTS、Δk 和 ΔAIC 使用同一基准。 RA、Dec 和延展半径显示两位小数。位置的统计误差和延展半径的上下误差来自各组合的 Fermipy LOC_DATA 或 EXT_DATA FITS 表。缺少可匹配的拟合结果时只显示数值。
 
-比较器只读取 manifest 中记录的 `<tag>/gtlike.log`，并且只纳入包含 `[DONE] gtlike (MINUIT) finished` 的任务。它输出按 \(-\log L\) 排序的表、相对最佳模型的
+比较器只读取 manifest 中 `gtlike_log` 记录的固定日志路径（新任务为 `slurm.log_dir/<tag>_like.log`），并且只纳入包含 `[DONE] gtlike (MINUIT) finished` 的任务。它输出按 \(-\log L\) 排序的表、相对最佳模型的
 
 \[
 \Delta TS=2\left[(-\log L)_i-(-\log L)_{\rm best}\right],
@@ -244,7 +244,7 @@ fermiflow spatial-grid --config ../configs/spatial_grid.yaml --plot
 
 ```bash
 fermiflow spatial-grid --config ../configs/spatial_grid_2GeV.yaml \
-  --compare-likelihood --reference g328-point-extend-gaussian-pt-point \
+  --compare-likelihood --reference g328-P-extend-G-pt-P \
   --csv ../products_2GeV/spatial_grid_2GeV/results.csv
 ```
 
@@ -261,3 +261,9 @@ python -m scripts.csv_to_tex \
 ```
 
 生成九列表格数据行，放到 AASTeX 的 `\startdata` 和 `\enddata` 之间；需要 `multirow`。备注保存在 TeX 的 `% Notes:` 注释中，不额外增加表格列。也可单独复制 `scripts/csv_to_tex.py`，运行 `python csv_to_tex.py results.csv results.tex`。
+
+### Grid 固定日志与覆盖
+
+新生成的空间任务使用 `slurm.log_dir/<tag>_spatial.log`，gtlike 任务使用 `slurm.log_dir/<tag>_like.log`。Slurm 将标准输出和错误写入同一个文件，显式设置 `--open-mode=truncate`，每次任务启动时覆盖旧任务日志。gtlike 不再使用 `tee` 复制第二份日志。manifest 的 `gtlike_log` 指向这份固定 Slurm 日志，比较器仍要求正常完成标记，失败或未完成的运行不参与比较。同一组合不要同时运行两次。现有 Fermitools/Fermipy 程序自身的日志机制不受此修改影响。
+
+空间配置、输入模型、任务脚本统一命名为 `<tag>_spatial.yaml`、`<tag>_spatial.xml`、`<tag>_spatial.sbatch`；统一提交脚本为 `submit_spatial.sh`、`submit_like.sh` 和 `submit_tsmap.sh`。旧脚本不会自动改写，需要重新生成；旧 manifest 仍读取原来记录的路径。此次不调整输出目录层级或 region 存放位置。
