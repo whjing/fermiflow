@@ -851,7 +851,6 @@ def write_likelihood_latex(path, rows, source_names, reference):
     missing = r"\ldots"
     headings = {0: "Background only", 1: "Single-source", 2: "Two-source", 3: "Three-source"}
     lines = []
-    model_index = 0
     for count, entries in sorted(groups.items()):
         if lines:
             lines.append(r"\hline")
@@ -860,9 +859,6 @@ def write_likelihood_latex(path, rows, source_names, reference):
         for entry_index, (row, components) in enumerate(entries):
             if entry_index:
                 lines.append(r"\cline{2-9}")
-            identifier = chr(ord("a") + model_index) if model_index < 26 else str(model_index + 1)
-            model_index += 1
-            print(f"LaTeX model ({identifier}): {row['tag']}")
             labels = [label(name, model) for name, model in components]
             delta_ts = 2 * (reference["nll"] - row["nll"]) if reference else None
             stats = [
@@ -875,8 +871,6 @@ def write_likelihood_latex(path, rows, source_names, reference):
                     name, (missing, missing, "---" if model == "point" else missing)
                 )
                 component = labels[index] if labels else "---"
-                if index == 0:
-                    component = f"({identifier}) {component}"
                 cells = [
                     group if index == 0 else "",
                     component, ra, dec, radius,

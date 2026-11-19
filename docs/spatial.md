@@ -193,7 +193,7 @@ fermiflow spatial-grid --config ../configs/spatial_grid.yaml --compare-likelihoo
 
 指定基准时，可加 `--reference <tag>`，或在 grid YAML 中设置 `comparison.reference`。命令行优先，默认使用可计算 AIC 的完成模型中 AIC 最低的一项。终端和 CSV 输出 `k`、`delta_k` 和 `delta_aic`。`k` 从每个组合最终 MINUIT XML 的 `free="1"` 计数，表示最终 gtlike 拟合的自由参数数目。此前定位或延展拟合中优化、在最终 XML 中固定的空间参数不计入。缺少可读的 MINUIT XML 时该行的 `k` 和 AIC 差值不可用。
 
-加上 `--latex spatial_model_rows.tex` 可导出 AASTeX 表格数据行。把结果放在 `\startdata` 和 `\enddata` 之间，并加载 `multirow`。数据行包含九列，组合标号放在 Component 列，终端打印标号与模型 tag 的对应关系。LaTeX 表的 ΔTS、Δk 和 ΔAIC 使用同一基准。 RA、Dec 和延展半径显示两位小数。位置的统计误差和延展半径的上下误差来自各组合的 Fermipy LOC_DATA 或 EXT_DATA FITS 表。缺少可匹配的拟合结果时只显示数值。
+加上 `--latex spatial_model_rows.tex` 可导出 AASTeX 表格数据行。把结果放在 `\startdata` 和 `\enddata` 之间，并加载 `multirow`。数据行包含九列，模型组合之间用横线分隔。LaTeX 表的 ΔTS、Δk 和 ΔAIC 使用同一基准。 RA、Dec 和延展半径显示两位小数。位置的统计误差和延展半径的上下误差来自各组合的 Fermipy LOC_DATA 或 EXT_DATA FITS 表。缺少可匹配的拟合结果时只显示数值。
 
 比较器只读取 manifest 中记录的 `<tag>/gtlike.log`，并且只纳入包含 `[DONE] gtlike (MINUIT) finished` 的任务。它输出按 \(-\log L\) 排序的表、相对最佳模型的
 
@@ -237,3 +237,5 @@ fermiflow spatial-grid --config ../configs/spatial_grid.yaml --plot
 
 
 比较模型时保留相同的数据选择与背景策略。`--compare-likelihood` 给出拟合差值，显著性解读还取决于模型是否嵌套以及检验的自由度。
+
+定位失败（`fit_success: false` 或 `fit_inbounds: false`）的点源，region 使用返回结果中有效的候选 `ra`、`dec`，以橙色菱形标记，并以橙色虚线圆显示候选 `pos_r68`；这些是失败拟合的候选结果，不能作为可靠定位误差。缺少有效候选坐标时，保留 ROI 位置、用橙色菱形标记且不画误差圆。成功定位仍用青色十字和黄色虚线圆；延展源仍用青色十字和实线延展圆。失败定位返回有效候选坐标时，也会更新 Fermipy 的 ROI 和 likelihood 空间模型，再重新拟合，因此最终 XML 以及后续 prepare-gtlike 的输入 XML 使用相同候选位置。若失败结果缺少有效坐标，任务停止，避免静默沿用原位置。

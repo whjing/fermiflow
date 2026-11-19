@@ -30,7 +30,7 @@ def localization_r68(localization_result):
         value = float(value)
     except (TypeError, ValueError):
         return None
-    return value if value > 0 else None
+    return value if isfinite(value) and value > 0 else None
 
 
 def extension_r68(extension_result):
@@ -59,7 +59,8 @@ def write_ds9_regions(
 
     Extended sources retain their fitted r68 circle.  Point sources retain a
     dashed localisation-r68 circle.  In both cases the source name appears
-    only beside the central cross, so region overlays stay readable.
+    only beside the centre marker. Failed point localizations use an orange
+    diamond at the returned candidate position, without updating the ROI model.
     """
     localization_results = localization_results or {}
     extension_results = extension_results or {}
@@ -90,12 +91,44 @@ def write_ds9_regions(
             requested_model = source_config.get("spatial_model", "PointSource")
             is_point_source = requested_model == "PointSource"
 
+            marker = "cross"
+            color = "cyan"
             if is_point_source:
-                pos_r68 = localization_r68(localization_results.get(source_name))
+                result = localization_results.get(source_name) or {}
+                failed = any(
+                    key in result and not bool(result[key])
+                    for key in ("fit_success", "fit_inbounds")
+                )
+                pos_r68 = localization_r68(result)
+                if failed:
+                    marker, color = "diamond", "orange"
+                    try:
+                        candidate_ra = float(result["ra"])
+                        candidate_dec = float(result["dec"])
+                        valid_candidate = (
+                            isfinite(candidate_ra) and isfinite(candidate_dec)
+                            and -90 <= candidate_dec <= 90
+                        )
+                    except (KeyError, TypeError, ValueError):
+                        valid_candidate = False
+                    if valid_candidate:
+                        ra, dec = candidate_ra % 360, candidate_dec
+                        logger.warning(
+                            "Failed localization for %s: region shows candidate "
+                            "(%.6f, %.6f), marked with an orange diamond.",
+                            source_name, ra, dec,
+                        )
+                    else:
+                        pos_r68 = None
+                        logger.warning(
+                            "Failed localization for %s has no valid candidate "
+                            "coordinates; region retains the ROI position "
+                            "with an orange diamond and no error circle.", source_name,
+                        )
                 if pos_r68 is not None:
                     handle.write(
                         f"circle({ra:.6f},{dec:.6f},{pos_r68:.6f}d) "
-                        "# color=yellow dash=1\n"
+                        f"# color={'orange' if failed else 'yellow'} dash=1\n"
                     )
                 else:
                     logger.warning(
@@ -119,7 +152,7 @@ def write_ds9_regions(
 
             handle.write(
                 f"point({ra:.6f},{dec:.6f}) "
-                f"# point=cross color=cyan text={{{source_name}}}\n"
+                f"# point={marker} color={color} text={{{source_name}}}\n"
             )
 
     logger.info("DS9 region written: %s", region_file)
@@ -276,6 +309,25 @@ def run_source_spatial_fit(
 
         logger.info("Localizing point source: %s", source_name)
         localization_result = gta.localize(source_name, **options)
+        if localization_result and any(
+            key in localization_result and not bool(localization_result[key])
+            for key in ("fit_success", "fit_inbounds")
+        ):
+            # Adopt the returned candidate in the live likelihood as well as
+            # the ROI, so source maps and all downstream XMLs stay consistent.
+            ra = float(localization_result["ra"])
+            dec = float(localization_result["dec"])
+            if not (isfinite(ra) and isfinite(dec) and -90 <= dec <= 90):
+                raise ValueError(f"No valid failed-localization candidate for {source_name}")
+            gta.set_source_morphology(
+                source_name, spatial_model="PointSource",
+                spatial_pars={"ra": ra % 360, "dec": dec},
+            )
+            logger.warning(
+                "Adopting failed-localization candidate for %s in the model: "
+                "RA=%.6f Dec=%.6f; this is not a successful localization.",
+                source_name, ra % 360, dec,
+            )
         extension_result = None
 
     else:
