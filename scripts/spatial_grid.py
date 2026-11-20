@@ -1033,12 +1033,15 @@ def compare_likelihood(config_path, reference_tag=None, latex_path=None, csv_pat
     print("\nAll completed models")
     print("--------------------")
     print(
-        f"{'rank':>4}  {'model':<40}  {'-logL':>15}  {'ΔTS from best':>14}  "
+        f"{'rank':>4}  {'model':<40}  {'-logL':>15}  {'ΔTS vs ref':>14}  "
         f"{'k':>5}  {'Δk':>5}  {'ΔAIC':>10}"
     )
     for rank, row in enumerate(ordered, start=1):
         row["rank"] = rank
         row["delta_ts_from_best"] = 2.0 * (row["nll"] - best)
+        row["delta_ts"] = 2.0 * (reference["nll"] - row["nll"]) if reference else ""
+        row["reference"] = reference["tag"] if reference else ""
+        delta_ts_text = f"{row['delta_ts']:.2f}" if reference else "N/A"
         k_text = "N/A" if row["k"] is None else str(row["k"])
         delta_k_text = delta_aic_text = "N/A"
         if reference is not None and row["k"] is not None:
@@ -1049,7 +1052,7 @@ def compare_likelihood(config_path, reference_tag=None, latex_path=None, csv_pat
             delta_aic_text = f"{delta_aic:.2f}"
         print(
             f"{rank:4d}  {row['tag']:<40}  {row['nll']:15.2f}  "
-            f"{row['delta_ts_from_best']:14.2f}  {k_text:>5}  {delta_k_text:>5}  {delta_aic_text:>10}"
+            f"{delta_ts_text:>14}  {k_text:>5}  {delta_k_text:>5}  {delta_aic_text:>10}"
         )
 
     print_source_comparisons(ordered, source_names)
@@ -1065,6 +1068,8 @@ def compare_likelihood(config_path, reference_tag=None, latex_path=None, csv_pat
         "rank",
         "tag",
         "nll",
+        "delta_ts",
+        "reference",
         "delta_ts_from_best",
         "k",
         "delta_k",

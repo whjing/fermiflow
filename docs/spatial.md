@@ -195,7 +195,7 @@ fermiflow spatial-grid --config ../configs/spatial_grid.yaml --compare-likelihoo
 
 加上 `--latex spatial_model_rows.tex` 可导出 AASTeX 表格数据行。把结果放在 `\startdata` 和 `\enddata` 之间，并加载 `multirow`。数据行包含九列，模型组合之间用横线分隔。LaTeX 表的 ΔTS、Δk 和 ΔAIC 使用同一基准。 RA、Dec 和延展半径显示两位小数。位置的统计误差和延展半径的上下误差来自各组合的 Fermipy LOC_DATA 或 EXT_DATA FITS 表。缺少可匹配的拟合结果时只显示数值。
 
-比较器只读取 manifest 中 `gtlike_log` 记录的固定日志路径（新任务为 `slurm.log_dir/<tag>_like.log`），并且只纳入包含 `[DONE] gtlike (MINUIT) finished` 的任务。它输出按 \(-\log L\) 排序的表、相对最佳模型的
+比较器只读取 manifest 中 `gtlike_log` 记录的固定日志路径（新任务为 `slurm.log_dir/<tag>_like.log`），并且只纳入包含 `[DONE] gtlike (MINUIT) finished` 的任务。它输出按 \(-\log L\) 排序的表，终端 ΔTS 相对于所选 reference；汇总 CSV 另保留相对最佳模型的非负辅助差值
 
 \[
 \Delta TS=2\left[(-\log L)_i-(-\log L)_{\rm best}\right],
@@ -301,3 +301,5 @@ region 的源名仅写在中心标记旁，定位/延展圆明确设置空文字
 位置比较图默认采用 `plot.position_coordinates: absolute`：横轴RA、纵轴Dec（J2000，度），黑色加号标输入位置，横轴按天图惯例向左增大；右侧仍比较输入和拟合r68。设置 `position_coordinates: offset` 可恢复上述角分差值模式。导出的 spatial_positions.csv 同时保留绝对位置与偏移，不受绘图模式影响。
 
 偏移模式的横轴同样按天图方向反转：正 ΔRA cos Dec 在左，负值在右；ΔDec 正值仍在上。这里只改变显示方向，不改变 CSV 中偏移的数值或符号。
+
+比较终端表格的 `ΔTS vs ref` 与逐源 `--csv` 中的 `delta_ts` 统一使用所选 reference：`2*(nll_ref - nll_model)`，即2倍 log likelihood 改善。参考模型为0，更好为正、更差为负；满足 `delta_aic = 2*delta_k - delta_ts`。默认汇总CSV也新增 `delta_ts` 和 `reference`；旧的非负 `delta_ts_from_best` 仅作为单独的辅助列保留，不用于终端 ΔTS 列。更换参考不会改变按likelihood排序的顺序。
