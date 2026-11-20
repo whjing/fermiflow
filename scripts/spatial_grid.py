@@ -1180,6 +1180,7 @@ def plot_grid(config_path):
             resolve_path(plot_config.get("position_output", output_root / "spatial_positions.png"), base_dir),
             resolve_path(plot_config.get("position_csv", output_root / "spatial_positions.csv"), base_dir),
             read_spatial_errors,
+            coordinates=plot_config.get("position_coordinates", "absolute"),
         )
     if not plot_config.get("tsmap"):
         print("No plot.tsmap configured; skipped TS-map panels.")

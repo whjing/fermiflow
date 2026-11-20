@@ -80,9 +80,11 @@ def collect_positions(rows, names, read_errors):
     return records
 
 
-def plot_positions(rows, names, output, csv_output, read_errors):
+def plot_positions(rows, names, output, csv_output, read_errors, coordinates="absolute"):
     import matplotlib.pyplot as plt
     from matplotlib.lines import Line2D
+    if coordinates not in ("absolute", "offset"):
+        raise ValueError("plot.position_coordinates must be absolute or offset")
     records = collect_positions(rows, names, read_errors)
     if not records:
         print('No fitted positions available for the position comparison.')
@@ -104,9 +106,15 @@ def plot_positions(rows, names, output, csv_output, read_errors):
         for y, r in enumerate(subset):
             color, marker = colors[r['tag']], markers[r['spatial_model']]
             failed = r['status'] == 'failed_or_out_of_bounds'
-            dx, dy = r['delta_ra_cosdec_arcmin'], r['delta_dec_arcmin']
-            xerr = r['ra_err_deg'] * math.cos(math.radians(r['fitted_dec'])) * 60 if r['ra_err_deg'] != '' else None
-            yerr = r['dec_err_deg'] * 60 if r['dec_err_deg'] != '' else None
+            if coordinates == "absolute":
+                dx, dy = r['fitted_ra'], r['fitted_dec']
+                xerr = r['ra_err_deg'] if r['ra_err_deg'] != '' else None
+                yerr = r['dec_err_deg'] if r['dec_err_deg'] != '' else None
+                position.scatter([r['input_ra']], [r['input_dec']], marker='+', color='black', s=100, zorder=6)
+            else:
+                dx, dy = r['delta_ra_cosdec_arcmin'], r['delta_dec_arcmin']
+                xerr = r['ra_err_deg'] * math.cos(math.radians(r['fitted_dec'])) * 60 if r['ra_err_deg'] != '' else None
+                yerr = r['dec_err_deg'] * 60 if r['dec_err_deg'] != '' else None
             position.errorbar(dx, dy, xerr=xerr, yerr=yerr, fmt=marker, color=color, capsize=2,
                               markersize=7, markerfacecolor='none' if failed else color)
             position.annotate(str(numbers[r['tag']]), (dx, dy), xytext=(5, 4), textcoords='offset points', fontsize=7)
@@ -124,12 +132,19 @@ def plot_positions(rows, names, output, csv_output, read_errors):
                     radii.scatter([new], [y], marker='x', color='darkorange', s=65, zorder=5)
             else:
                 radii.text(.02, y, 'Point: no extension', transform=radii.get_yaxis_transform(), fontsize=8, color=color)
-        position.axhline(0, color='gray', lw=.7)
-        position.axvline(0, color='gray', lw=.7)
-        position.scatter([0], [0], marker='+', color='black', s=100, zorder=6)
-        position.set(xlabel=r'$\Delta\mathrm{RA}\cos(\mathrm{Dec})$ [arcmin; east]',
-                     ylabel=r'$\Delta\mathrm{Dec}$ [arcmin; north]', title=f'{name}: fitted minus own input centre')
-        position.set_aspect('equal', adjustable='datalim')
+        if coordinates == "absolute":
+            position.set(xlabel='R.A. (J2000) [deg]', ylabel='Decl. (J2000) [deg]',
+                         title=f'{name}: fitted centres; input marked +')
+            position.ticklabel_format(axis='both', style='plain', useOffset=False)
+            position.invert_xaxis()
+            position.set_aspect(1 / max(abs(math.cos(math.radians(subset[0]['input_dec']))), 1e-6), adjustable='datalim')
+        else:
+            position.axhline(0, color='gray', lw=.7)
+            position.axvline(0, color='gray', lw=.7)
+            position.scatter([0], [0], marker='+', color='black', s=100, zorder=6)
+            position.set(xlabel=r'$\Delta\mathrm{RA}\cos(\mathrm{Dec})$ [arcmin; east]',
+                         ylabel=r'$\Delta\mathrm{Dec}$ [arcmin; north]', title=f'{name}: fitted minus own input centre')
+            position.set_aspect('equal', adjustable='datalim')
         position.grid(alpha=.25)
         radii.set_yticks(range(len(subset)), [f"{numbers[r['tag']]:02d} {r['spatial_model']}" for r in subset], fontsize=7)
         radii.set_ylim(len(subset)-.5, -.5)

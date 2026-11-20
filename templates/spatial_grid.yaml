@@ -54,6 +54,7 @@ comparison:
 # Optional common TS-map plot after spatial jobs finish.
 # plot:
 #   position_comparison: true # Also compare fitted vs input positions and r68
+#   position_coordinates: absolute # RA/Dec in degrees; offset for differences in arcmin
 #   # position_output: ../figures/spatial_positions.png
 #   # position_csv: ../figures/spatial_positions.csv
 #   tsmap: ../products___ENERGY_LABEL__/__ANALYSIS_NAME___tsmap.fits

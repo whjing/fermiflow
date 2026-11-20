@@ -404,10 +404,11 @@ def main():
     gta = GTAnalysis(fermipy_config, logging={"verbosity": 3})
     gta.setup()
     gta.print_roi()
-    gta.delete_sources(
-        minmax_ts=[None, 1],
-        exclude=["gll_iem_v07", "iso_P8R3_SOURCE_V3_v1"],
-    )
+    if config.get("options", {}).get("delete_low_ts_sources", True):
+        gta.delete_sources(
+            minmax_ts=[None, 1],
+            exclude=["gll_iem_v07", "iso_P8R3_SOURCE_V3_v1"],
+        )
     gta.fit()
     gta.print_params(True)
     gta.write_roi("fit_model", make_plots=True)

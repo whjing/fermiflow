@@ -295,3 +295,7 @@ region 的源名仅写在中心标记旁，定位/延展圆明确设置空文字
 右边逐模型比较输入（灰色空心点）与拟合后（彩色标记）的延展 r68，并连线显示变化、绘制可用的延展上下误差。点源注明无延展，不把定位 r68 当成延展半径。源不存在或未生成最终 XML 时不画对应点，不伪造零偏移。拟合值读取 `_spatial_final.xml`（兼容 `_00.xml`），误差和失败状态读取每源 LOC_DATA/EXT_DATA FITS；缺少误差文件时仍画位置，但 CSV 明确注明误差不可用。
 
 可选配置：`plot.position_comparison: false` 关闭新增图；`plot.position_output`、`plot.position_csv` 可指定输出路径，相对于配置文件。未设置 tsmap 时也能生成位置对比图。位置图的范围独立自动缩放，不受 TS-map 的 plot.center/size 影响。CSV 保留原始数值精度供后续分析；这张图无需重新拟合。
+
+固定邻源只测试一个目标时，可仅把目标列入 grid.sources，其他邻源保留在模板中，空间参数设置为 free="0"。若需要严格保留同一背景源集合，在空间模板中设置 `options.delete_low_ts_sources: false`，关闭原来的 TS<1 自动删源步骤；默认仍为 true。全 N 指本次受检源全部缺失，固定邻源继续保留，N 组直接进入 gtlike。
+
+位置比较图默认采用 `plot.position_coordinates: absolute`：横轴RA、纵轴Dec（J2000，度），黑色加号标输入位置，横轴按天图惯例向左增大；右侧仍比较输入和拟合r68。设置 `position_coordinates: offset` 可恢复上述角分差值模式。导出的 spatial_positions.csv 同时保留绝对位置与偏移，不受绘图模式影响。
