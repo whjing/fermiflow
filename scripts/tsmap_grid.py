@@ -43,7 +43,7 @@ def generate_grid(config_path, input_model):
         raise FileNotFoundError(project)
     tree = ET.parse(input_model)
     available = {source.get("name") for source in tree.getroot().findall("source")}
-    output = resolve_path(config["output_dir"], base)
+    output = resolve_path(config.get("output_dir"), base) or input_model.parent
     tasks = config.get("tasks", [])
     defaults = config.get("defaults") or {}
     delay = float(config.get("submit_delay_seconds", 300))
@@ -69,7 +69,13 @@ def generate_grid(config_path, input_model):
         if not all(math.isfinite(value) and value > 0 for value in (size, binsz)) or size < binsz:
             raise ValueError(f"Invalid size or binsz for {tag}")
         planned.append((tag, removed, size, binsz))
-    slurm = resolve_slurm_config(config.get("slurm"), base, base.parent, "tsmap_grid")
+    slurm_config = dict(config.get("slurm") or {})
+    # Keep task scripts and logs beside this input's outputs unless overridden.
+    if not slurm_config.get("sbatch_dir"):
+        slurm_config["sbatch_dir"] = str(output / "sbatch")
+    if not slurm_config.get("log_dir"):
+        slurm_config["log_dir"] = str(output / "logs")
+    slurm = resolve_slurm_config(slurm_config, base, base.parent, "tsmap_grid")
     output.mkdir(parents=True, exist_ok=True)
     jobs = []
     for tag, removed, size, binsz in planned:

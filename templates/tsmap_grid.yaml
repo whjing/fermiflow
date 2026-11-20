@@ -1,10 +1,12 @@
 # All YAML paths are relative to this file. CLI --input-model is relative to cwd.
 project_config: ../configs/fermitools_project.yaml # CHANGE ME: project YAML
-output_dir: ../products___ENERGY_LABEL__/tsmap_grid
+# Default: XML/FITS beside --input-model; sbatch/ and logs/ below that directory.
+# Optional override for multiple inputs that share a parent directory:
+# output_dir: ../products___ENERGY_LABEL__/tsmap_grid_my_case
 
 slurm:
-  sbatch_dir: ../sbatch/tsmap_grid
-  log_dir: ../logs/tsmap_grid
+  # sbatch_dir: ../custom_jobs   # Defaults to output directory/sbatch
+  # log_dir: ../custom_logs      # Defaults to output directory/logs
   # working_dir: ../scripts
   # conda_sh: /path/to/miniforge3/etc/profile.d/conda.sh # if conda is not on PATH
 # Each job uses one CPU and activates the fermi environment automatically.

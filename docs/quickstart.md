@@ -160,13 +160,15 @@ fermiflow run --config ../configs/fermitools_project.yaml --mode tsmap --input-m
 
 ```bash
 fermiflow init --mode tsmap-grid --config ../configs/tsmap_grid.yaml --target my_target --energy-label 1GeV
-# 编辑 project_config、output_dir，以及 tasks 中要删除的准确源名。
+# 编辑 project_config 和 tasks 中要删除的准确源名。
 fermiflow tsmap-grid --config ../configs/tsmap_grid.yaml --input-model ../products_1GeV/my_target_minuit.xml
-bash ../sbatch/tsmap_grid/submit_tsmap.sh
+bash ../products_1GeV/sbatch/submit_tsmap.sh
 ```
 
-生成器固定模板中全部参数，再按 `tasks[].remove_sources` 删除完整源节点；原模板不改动。不删除源时输出 `tsmap-res.xml/.fits`，删除源时按 YAML 顺序输出 `tsmap-src1-src2.xml/.fits`。XML 和 FITS 均在 `output_dir`，每个任务一个 `.sbatch`，统一提交脚本在 `slurm.sbatch_dir`。生成过程不执行或提交任务，也不预先生成 FITS。重复生成会覆盖同名 XML 和任务脚本，运行时 TS map 也会覆盖同名 FITS，保留不同轮次请使用不同目录。
+生成器固定模板中全部参数，再按 `tasks[].remove_sources` 删除完整源节点；原模板不改动。不删除源时输出 `tsmap-res.xml/.fits`，删除源时按 YAML 顺序输出 `tsmap-src1-src2.xml/.fits`。XML 和 FITS 默认写到命令行 `--input-model` 所在目录，每个任务一个 `.sbatch`，统一提交脚本默认在该目录的 `sbatch/submit_tsmap.sh`，Slurm 日志默认在该目录的 `logs/`。可省略 `output_dir`、`slurm.sbatch_dir`、`slurm.log_dir`。如显式设置这些字段，则仍按 YAML 指定路径输出；未设置的 sbatch/log 目录派生自实际输出目录。生成过程不执行或提交任务，也不预先生成 FITS。重复生成会覆盖同名 XML 和任务脚本，运行时 TS map 也会覆盖同名 FITS，保留不同轮次请使用不同目录。
 
 每个任务固定为 1 CPU、激活 `fermi`，不执行 `punlearn`；如批处理找不到 conda，设置 `slurm.conda_sh`。任务日志在 `slurm.log_dir`，流水线自身日志仍按项目 YAML 配置输出。默认任务工作目录为 YAML 所在目录的同级 `scripts/`，也可设置 `slurm.working_dir`。YAML 路径相对于 YAML，命令行输入 XML 路径相对于执行目录。
 
 `defaults.size`（方图边长，度）和 `defaults.binsz`（像素大小，度）可由每个任务覆盖。`submit_delay_seconds` 默认 300，提交脚本在两次 `sbatch` 之间等待 5 分钟，不保证实际调度开始时间间隔。不同源名转换为安全文件名后若重名，则停止生成并提示。若某个任务要求删除的源不在输入 XML 中，则打印缺失源名并跳过整个任务，其他任务继续生成。联合删源中只要有一个源缺失也跳过整项，不悄悄改成部分删源。提交脚本只包含本次有效任务；旧的同名 XML/sbatch/FITS 不自动删除，但不会加入本次提交清单。全部任务被跳过时生成不含 sbatch 命令的提交脚本，不提交任何任务。
+
+多个空间组合各自的 `_reloc_minuit.xml` 在不同目录时，同一份 TS-map YAML 可重复使用，自动在各输入目录生成任务，不相互覆盖。如果不同输入 XML 位于同一目录（例如初始 more/less 模型），同级的 tsmap-res 等名称仍会相同，应分别显式设置独立 output_dir。输入 XML 本身不会被改写。
