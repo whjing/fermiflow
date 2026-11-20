@@ -951,6 +951,9 @@ def write_spatial_csv(path, rows, source_names, reference):
                 record[prefix] = numbers[0] if numbers else ""
                 record[prefix + "_err_hi"] = numbers[1].lstrip("+-") if len(numbers) > 1 else ""
                 record[prefix + "_err_lo"] = numbers[-1].lstrip("+-") if len(numbers) > 1 else ""
+            for key in ("nll", "delta_ts", "delta_aic", "ts_minuit", "ts_summary", "ts_drmnfb"):
+                if record.get(key) not in (None, ""):
+                    record[key] = f"{float(record[key]):.2f}"
             records.append(record)
     fields = ["tag", "component_count", "source", "spatial_model",
               "ra", "ra_err_hi", "ra_err_lo", "dec", "dec_err_hi", "dec_err_lo",
@@ -1163,19 +1166,28 @@ def plot_grid(config_path):
     base_dir = config_path.parent
     with config_path.open(encoding="utf-8") as handle:
         grid = yaml.safe_load(handle) or {}
-    plot_config = grid.get("plot")
-    if not plot_config or not plot_config.get("tsmap"):
-        raise SystemExit("No plot.tsmap is set in spatial_grid.yaml; nothing to plot.")
+    plot_config = grid.get("plot") or {}
 
     output_root = resolve_path(grid.get("base", {}).get("output_root"), base_dir)
     manifest = output_root / "spatial_grid_manifest.csv"
     if not manifest.is_file():
         raise FileNotFoundError(f"Grid manifest not found: {manifest}")
-    with manifest.open(encoding="utf-8") as handle:
-        rows = [row for row in csv.DictReader(handle)
-                if row.get("region_file") and Path(row["region_file"]).is_file()]
+    rows = read_manifest(manifest)
+    if plot_config.get("position_comparison", True):
+        from spatial_diagnostics import plot_positions
+        plot_positions(
+            rows, [source["name"] for source in grid.get("sources", [])],
+            resolve_path(plot_config.get("position_output", output_root / "spatial_positions.png"), base_dir),
+            resolve_path(plot_config.get("position_csv", output_root / "spatial_positions.csv"), base_dir),
+            read_spatial_errors,
+        )
+    if not plot_config.get("tsmap"):
+        print("No plot.tsmap configured; skipped TS-map panels.")
+        return
+    rows = [row for row in rows if row.get("region_file") and Path(row["region_file"]).is_file()]
     if not rows:
-        raise SystemExit("No completed region files are listed in the grid manifest.")
+        print("No completed region files; skipped TS-map panels.")
+        return
 
     tsmap_file = resolve_path(plot_config["tsmap"], base_dir)
     output_png = resolve_path(

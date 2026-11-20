@@ -38,6 +38,8 @@ fermiflow run --config ../configs/fermitools_project.yaml --mode prepare
 
 `spatial-grid` 支持受检源全部为 `N` 的背景对照组合：跳过空间拟合，直接通过 `--prepare-gtlike` 生成 gtlike 输入和任务，完成后一起比较 likelihood/AIC。仅删除 YAML 列出的受检源，保留其他背景源。参见[全 N 对照模型](docs/spatial.md#全部受检源缺失的对照组合)。
 
+`spatial-grid --plot` 还会生成各源相对输入中心的位置偏移及延展半径对比图，并导出数值 CSV，参见[位置与半径比较](docs/spatial.md#比较各组合的拟合位置与半径)。
+
 ## Wiki
 
 | 页面 | 内容 |

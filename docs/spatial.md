@@ -285,3 +285,13 @@ region 的源名仅写在中心标记旁，定位/延展圆明确设置空文字
 ### CSV 中分别保留各阶段源 TS
 
 `--compare-likelihood --csv results.csv` 会从 manifest 指向的 gtlike 日志读取各受检源的 TS，新增 `ts_minuit`（MINUIT 源块的 `TS value`）、`ts_summary`（后续 `TS(源名)`）和 `ts_drmnfb`（DRMNFB 源块的 `TS value`）三列。每类取日志中该源最后一次有效数值，缺失留空；负 TS 保留，不截为零。不使用一个阶段的数据填充另一个阶段，也不把这些源 TS 与模型之间的 `delta_ts` 混淆。该处理只读日志，不重新拟合。已有 CSV 需要重跑原比较命令才会新增列；CSV 转 TeX 脚本继续兼容，默认不把新增 TS 列加入九列表格。
+
+`--csv` 导出的浮点数统一四舍五入保留两位小数，包括坐标/误差、r68、nll、delta_ts、delta_aic 和各阶段 TS；k、delta_k、component_count 保持整数。差值仍先用原始精度计算，再格式化输出，不用已舍入的 nll 反算差值。
+
+### 比较各组合的拟合位置与半径
+
+运行原来的 `fermiflow spatial-grid --config ... --plot`，除 TS-map 组合图外默认新增 `output_root/spatial_positions.png` 和 `spatial_positions.csv`。每个受检源一行两幅图：左边叠加各组合相对于各自生成的 `_spatial.xml` 输入中心的位置偏移，横轴为东西向天空偏移（局部约等于 ΔRA cos Dec）、纵轴为南北偏移，单位角分；黑色加号为输入中心。模型颜色和编号统一，圆/三角/方形分别表示 Point/Gaussian/Disk，橙色叉号表示定位/延展失败或越界。只有成功、且 FITS 结果中心与最终 XML 匹配时才画可用的坐标误差棒。
+
+右边逐模型比较输入（灰色空心点）与拟合后（彩色标记）的延展 r68，并连线显示变化、绘制可用的延展上下误差。点源注明无延展，不把定位 r68 当成延展半径。源不存在或未生成最终 XML 时不画对应点，不伪造零偏移。拟合值读取 `_spatial_final.xml`（兼容 `_00.xml`），误差和失败状态读取每源 LOC_DATA/EXT_DATA FITS；缺少误差文件时仍画位置，但 CSV 明确注明误差不可用。
+
+可选配置：`plot.position_comparison: false` 关闭新增图；`plot.position_output`、`plot.position_csv` 可指定输出路径，相对于配置文件。未设置 tsmap 时也能生成位置对比图。位置图的范围独立自动缩放，不受 TS-map 的 plot.center/size 影响。CSV 保留原始数值精度供后续分析；这张图无需重新拟合。
