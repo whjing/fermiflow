@@ -724,6 +724,41 @@ def read_gtlike_result(row):
     }
 
 
+
+def read_source_ts(log_path, source_names):
+    """Keep the last per-source TS separately for each fitting stage."""
+    path = Path(log_path) if log_path else None
+    if path is None or not path.is_file():
+        return {}
+    number = r"([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?)"
+    ts_value = re.compile(r"^TS value:\s*" + number + r"(?:\s|$)")
+    summary = re.compile(r"^TS\((.+)\):\s*" + number + r"(?:\s|$)")
+    optimizer = re.compile(r"^Optimizer\s*:\s*(DRMNFB|MINUIT)\s*$")
+    values = {name: {} for name in source_names}
+    stage = current = None
+    for raw in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = raw.rsplit("|", 1)[-1].strip()
+        match = optimizer.match(line)
+        if match:
+            stage, current = match[1].lower(), None
+            continue
+        match = summary.match(line)
+        if match:
+            if match[1] in values and math.isfinite(float(match[2])):
+                values[match[1]]["ts_summary"] = float(match[2])
+            current = None
+            continue
+        if line.endswith(":"):
+            current = line[:-1] if line[:-1] in values else None
+            continue
+        match = ts_value.match(line)
+        if match and current is not None and stage is not None:
+            if math.isfinite(float(match[1])):
+                values[current]["ts_" + stage] = float(match[1])
+            current = None
+    return values
+
+
 def print_source_comparisons(rows, source_names):
     """Compare one source while holding every configured companion fixed."""
     for source_name in source_names:
@@ -908,6 +943,8 @@ def write_spatial_csv(path, rows, source_names, reference):
                           delta_k=row.get("delta_k", ""), delta_aic=row.get("delta_aic", ""),
                           reference=reference["tag"] if reference else "",
                           notes="; ".join(note for note in row.get("fit_notes", {}).values() if note))
+            record.update({key: row.get("source_ts", {}).get(name, {}).get(key, "")
+                           for key in ("ts_minuit", "ts_summary", "ts_drmnfb")})
             values = row.get("latex_spatial", {}).get(name, ("", "", ""))
             for prefix, value in zip(("ra", "dec", "r68"), values):
                 numbers = re.findall(r"[-+]?\d+(?:\.\d+)?", value)
@@ -918,7 +955,7 @@ def write_spatial_csv(path, rows, source_names, reference):
     fields = ["tag", "component_count", "source", "spatial_model",
               "ra", "ra_err_hi", "ra_err_lo", "dec", "dec_err_hi", "dec_err_lo",
               "r68", "r68_err_hi", "r68_err_lo", "nll", "k", "delta_ts", "delta_k",
-              "delta_aic", "reference", "notes"]
+              "delta_aic", "reference", "ts_minuit", "ts_summary", "ts_drmnfb", "notes"]
     write_manifest(path, records, fields)
 
 
@@ -947,6 +984,8 @@ def compare_likelihood(config_path, reference_tag=None, latex_path=None, csv_pat
     reference_tag = reference_tag or comparison.get("reference")
     for row in completed:
         row["k"] = None
+        if csv_path is not None:
+            row["source_ts"] = read_source_ts(row.get("gtlike_log"), source_names)
         input_path = row.get("reloc_input_model", "")
         if input_path.endswith("_input.xml"):
             model = Path(input_path[:-len("_input.xml")] + "_minuit.xml")

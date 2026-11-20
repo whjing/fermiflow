@@ -169,4 +169,4 @@ bash ../sbatch/tsmap_grid/submit_tsmap.sh
 
 每个任务固定为 1 CPU、激活 `fermi`，不执行 `punlearn`；如批处理找不到 conda，设置 `slurm.conda_sh`。任务日志在 `slurm.log_dir`，流水线自身日志仍按项目 YAML 配置输出。默认任务工作目录为 YAML 所在目录的同级 `scripts/`，也可设置 `slurm.working_dir`。YAML 路径相对于 YAML，命令行输入 XML 路径相对于执行目录。
 
-`defaults.size`（方图边长，度）和 `defaults.binsz`（像素大小，度）可由每个任务覆盖。`submit_delay_seconds` 默认 300，提交脚本在两次 `sbatch` 之间等待 5 分钟，不保证实际调度开始时间间隔。不同源名转换为安全文件名后若重名，或源名不存在，则停止生成并提示。
+`defaults.size`（方图边长，度）和 `defaults.binsz`（像素大小，度）可由每个任务覆盖。`submit_delay_seconds` 默认 300，提交脚本在两次 `sbatch` 之间等待 5 分钟，不保证实际调度开始时间间隔。不同源名转换为安全文件名后若重名，则停止生成并提示。若某个任务要求删除的源不在输入 XML 中，则打印缺失源名并跳过整个任务，其他任务继续生成。联合删源中只要有一个源缺失也跳过整项，不悄悄改成部分删源。提交脚本只包含本次有效任务；旧的同名 XML/sbatch/FITS 不自动删除，但不会加入本次提交清单。全部任务被跳过时生成不含 sbatch 命令的提交脚本，不提交任何任务。

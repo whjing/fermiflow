@@ -57,7 +57,9 @@ def generate_grid(config_path, input_model):
         removed = list(dict.fromkeys(removed))
         missing = set(removed) - available
         if missing:
-            raise ValueError(f"Sources not found in input XML: {', '.join(sorted(missing))}")
+            print(f"Skip task remove_sources={removed}: sources not found in input XML: "
+                  f"{', '.join(sorted(missing))}")
+            continue
         tag = "tsmap-" + ("-".join(file_label(name) for name in removed) if removed else "res")
         if tag in tags:
             raise ValueError(f"Duplicate output tag: {tag}")

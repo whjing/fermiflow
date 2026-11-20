@@ -281,3 +281,7 @@ python -m scripts.csv_to_tex \
 `plot` 可选设置 `center: {ra: 238.885, dec: -53.283}` 和 `size: 2.0`（ICRS 坐标及天空视野边长，单位度）。两者一起填写；省略或同时为 null 时，严格显示 TS map 原始全图范围，轮廓或 region 不再自动扩展坐标轴。各子图使用相同视野。该选项只改变显示范围，不修改 FITS 或 region；超出 TS map 的部分没有数据。视野边界在中心的天空偏移坐标系中计算，再投影到原图 WCS。
 
 region 的源名仅写在中心标记旁，定位/延展圆明确设置空文字；绘图器也只给中心点标名称，不给圆标名称。若使用旧 region，重新生成才能更新文件内的标注；绘图本身仍只标中心。
+
+### CSV 中分别保留各阶段源 TS
+
+`--compare-likelihood --csv results.csv` 会从 manifest 指向的 gtlike 日志读取各受检源的 TS，新增 `ts_minuit`（MINUIT 源块的 `TS value`）、`ts_summary`（后续 `TS(源名)`）和 `ts_drmnfb`（DRMNFB 源块的 `TS value`）三列。每类取日志中该源最后一次有效数值，缺失留空；负 TS 保留，不截为零。不使用一个阶段的数据填充另一个阶段，也不把这些源 TS 与模型之间的 `delta_ts` 混淆。该处理只读日志，不重新拟合。已有 CSV 需要重跑原比较命令才会新增列；CSV 转 TeX 脚本继续兼容，默认不把新增 TS 列加入九列表格。
