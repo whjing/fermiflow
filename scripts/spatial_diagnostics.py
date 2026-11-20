@@ -145,6 +145,7 @@ def plot_positions(rows, names, output, csv_output, read_errors, coordinates="ab
             position.set(xlabel=r'$\Delta\mathrm{RA}\cos(\mathrm{Dec})$ [arcmin; east]',
                          ylabel=r'$\Delta\mathrm{Dec}$ [arcmin; north]', title=f'{name}: fitted minus own input centre')
             position.set_aspect('equal', adjustable='datalim')
+            position.invert_xaxis()
         position.grid(alpha=.25)
         radii.set_yticks(range(len(subset)), [f"{numbers[r['tag']]:02d} {r['spatial_model']}" for r in subset], fontsize=7)
         radii.set_ylim(len(subset)-.5, -.5)

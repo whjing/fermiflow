@@ -299,3 +299,5 @@ region 的源名仅写在中心标记旁，定位/延展圆明确设置空文字
 固定邻源只测试一个目标时，可仅把目标列入 grid.sources，其他邻源保留在模板中，空间参数设置为 free="0"。若需要严格保留同一背景源集合，在空间模板中设置 `options.delete_low_ts_sources: false`，关闭原来的 TS<1 自动删源步骤；默认仍为 true。全 N 指本次受检源全部缺失，固定邻源继续保留，N 组直接进入 gtlike。
 
 位置比较图默认采用 `plot.position_coordinates: absolute`：横轴RA、纵轴Dec（J2000，度），黑色加号标输入位置，横轴按天图惯例向左增大；右侧仍比较输入和拟合r68。设置 `position_coordinates: offset` 可恢复上述角分差值模式。导出的 spatial_positions.csv 同时保留绝对位置与偏移，不受绘图模式影响。
+
+偏移模式的横轴同样按天图方向反转：正 ΔRA cos Dec 在左，负值在右；ΔDec 正值仍在上。这里只改变显示方向，不改变 CSV 中偏移的数值或符号。
