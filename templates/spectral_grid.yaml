@@ -1,0 +1,20 @@
+# Paths below are relative to this YAML. The project itself uses its usual path rules.
+base:
+  # CHANGE ME: final spatial fit XML; positions/widths are fixed during spectral fits.
+  input_model: ../products_1GeV/spatial_grid/srcT-P-srcP-P-srcE-G/srcT-P-srcP-P-srcE-G_reloc_minuit.xml
+  project_config: proj_100MeV.yaml  # CHANGE ME: prepare 100--500000 MeV data first
+  output_root: ../products_100MeV/spectral_grid
+  # model_policy: model_policy_spectral.yaml  # Optional background/free-parameter policy
+sources:
+  - name: srcT                    # CHANGE ME: exact XML source name
+    models: [pl, lp]
+  # Uncomment to test all 2x2 combinations for two sources.
+  # - name: srcP
+  #   models: [pl, lp]
+  # A single choice such as [pl] also works.
+slurm:
+  working_dir: ../scripts
+  # conda_sh: /path/to/miniforge3/etc/profile.d/conda.sh
+# CPU count=1, Conda environment=fermi; submissions are separated by 3 seconds.
+comparison:
+  reference: srcT-PL              # CHANGE ME if testing multiple sources

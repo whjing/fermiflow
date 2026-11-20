@@ -153,3 +153,22 @@ bash ../sbatch/sed_6bin_tslt2/submit_sed_filter.sh
 - `scripts/compare_likelihood.py`：修改文件顶部的 `models` 字典后，计算相对模型的 (2\Delta\log\mathcal{L})。
 
 这三项是可编辑的分析辅助脚本；用于新目标前，请先修改脚本顶部的目标名、输入 XML、日志和输出路径，避免写入其它项目的产品目录。
+
+## 多源谱型组合测试（spectral-grid）
+
+先准备100 MeV--500 GeV的项目配置、GTI、CCUBE和曝光；高能段的最终空间XML可以作为固定形态模板。`base.project_config` 决定实际分析能段，不能把1GeV的计数立方体用于100MeV分析。
+
+```bash
+fermiflow init --mode spectral-grid --config ../configs/spectral_100MeV.yaml
+# 编辑input_model、project_config、output_root和sources
+fermiflow spectral-grid --config ../configs/spectral_100MeV.yaml
+bash ../products_100MeV/spectral_grid/sbatch/submit_like.sh
+# 等待完成后比较
+fermiflow spectral-grid --config ../configs/spectral_100MeV.yaml --compare-likelihood --reference srcT-PL
+```
+
+`sources: [{name: srcT, models: [pl, lp]}]` 生成2组；再添加srcP的[pl,lp]生成4组。支持pl/powerlaw、lp/logparabola。文件名保留源名，组合如 `srcT-PL-srcP-LP`。每组XML与拟合产物放在 `output_root/<tag>/`，任务和日志在 `output_root/sbatch/`、`output_root/logs/`。默认1CPU、fermi环境，手动提交脚本每次间隔3秒；重复提交覆盖同名日志。
+
+转换保持参考能量处的通量和局部谱斜率；LP的beta从0开始。参考能量Scale/Eb及全部空间参数固定；未受检源的谱参数和自由状态沿用模板。可用base.model_policy统一背景自由状态，策略执行后空间参数仍强制固定。当前仅支持PowerLaw/LogParabola输入。
+
+比较从MINUIT完成标记之前的likelihood和最终XML读取自由参数数目k，避免混用之后summary的likelihood。未完成任务跳过，警告写入notes；最小AIC默认作为基准，也可通过--reference指定。导出spectral_comparison.csv（可用--csv改路径）及逐源spectral_curvature.csv。ΔTS=2(logL_model−logL_ref)，ΔAIC=2Δk−ΔTS。曲率比较只匹配其他源谱型相同、单个源PL/LP不同的组合；不自动换算sigma。使用相同事件、背景和自由参数策略比较，并检查收敛与边界；空间拟合阶段估计的参数不计入这里固定形态谱比较的k。

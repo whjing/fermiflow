@@ -50,3 +50,5 @@ fermiflow run --config ../configs/fermitools_project.yaml --mode prepare
 | [空间模型](docs/spatial.md) | 点源定位、Gaussian / Disk、Slurm 和 likelihood 比较 |
 | [谱与 SED](docs/sed.md) | 全能段 PL / LP、分能段拟合、TS 筛选和绘图 |
 | [检查与排错](docs/troubleshooting.md) | 常见问题与结果追溯 |
+
+`fermiflow spectral-grid` 可按 YAML 生成一个或多个源的 PL/LP 谱型组合、gtlike任务与 likelihood/ΔAIC 对比，参见[谱型组合测试](docs/sed.md#多源谱型组合测试spectral-grid)。

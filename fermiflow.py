@@ -30,6 +30,7 @@ INIT_TEMPLATES = {
     "spatial": "spatial_fit.yaml",
     "spatial-grid": "spatial_grid.yaml",
     "tsmap-grid": "tsmap_grid.yaml",
+    "spectral-grid": "spectral_grid.yaml",
     "model-policy": "model_policy.yaml",
     "sed-filter": "sed_filter.yaml",
 }
@@ -99,6 +100,7 @@ def main() -> None:
     subparsers.add_parser("spatial", help="Run the Fermipy spatial workflow.")
     subparsers.add_parser("spatial-grid", help="Generate or plot a grid of spatial hypotheses.")
     subparsers.add_parser("tsmap-grid", help="Generate TS-map XMLs and Slurm submission scripts.")
+    subparsers.add_parser("spectral-grid", help="Generate and compare PL/LP spectral combinations.", add_help=False)
     subparsers.add_parser("download", help="Download URLs in parallel with wget.")
     subparsers.add_parser("model", help="Create an XML with a parameter-freeing policy.")
     subparsers.add_parser("sed-filter", help="Make TS-filtered SED-bin XML models.")
@@ -130,6 +132,7 @@ def main() -> None:
         "spatial": "fit_spatial.py",
         "spatial-grid": "spatial_grid.py",
         "tsmap-grid": "tsmap_grid.py",
+        "spectral-grid": "spectral_grid.py",
         "download": "download.sh",
         "model": "edit_model.py",
         "sed-filter": "sed_filter.py",
