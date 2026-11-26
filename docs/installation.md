@@ -32,7 +32,7 @@ python -m pip install --upgrade --force-reinstall --no-deps \
   "git+https://github.com/whjing/fermiflow.git@main"
 ```
 
-如果 pip 无法获取临时环境的构建依赖，而当前 `fermi` 环境已装有 `setuptools`，可以给安装命令加上 `--no-build-isolation`，直接用当前环境构建。
+构建选项、环境与版本限制见[注意事项](notes.md#安装与版本)。
 
 ## 本地开发
 
@@ -43,7 +43,7 @@ git commit -m "Describe the change"
 git push origin main
 ```
 
-随后在超算重新执行上面的 `pip install --upgrade` 命令。普通 pip 安装不会自动跟随 GitHub 改动；每次需要新版本时重新安装一次即可。安装完成后直接运行 `fermiflow --help` 或具体分析命令。
+随后在超算重新执行上面的 `pip install --upgrade` 命令。安装完成后直接运行 `fermiflow --help` 或具体分析命令。
 
 - 提交内容：代码、YAML、少量 XML 模板、region 和 Slurm 脚本。
 
@@ -51,4 +51,4 @@ git push origin main
 
 ## 查看已安装的版本
 
-运行 `fermiflow --version` 查看包版本和 Git commit。发布新版本时，在 `pyproject.toml` 的 `[project]` 中更新 `version`。从 Git 仓库安装时，commit 对应安装所用的 Git 提交。本地构建时，commit 对应当时的 HEAD，构建中包含的未提交改动无法通过 commit 识别。缺少 Git 来源信息的安装会显示 `git: unknown`。
+运行 `fermiflow --version` 查看包版本和 Git commit。发布新版本时，在 `pyproject.toml` 的 `[project]` 中更新 `version`。从 Git 仓库安装时，commit 对应安装所用的 Git 提交。本地构建时，commit 对应当时的 HEAD；来源解释见[注意事项](notes.md#安装与版本)。

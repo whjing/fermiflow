@@ -275,7 +275,8 @@ def mark(ax, wcs, shape, center, label, color, marker, size=6):
     x, y = wcs.world_to_pixel(center.icrs)
     if not (-.5 <= x < shape[1]-.5 and -.5 <= y < shape[0]-.5):
         return
-    ax.plot(x, y, marker=marker, ls='none', ms=size, mfc='none', mec=color, zorder=5)
+    if marker is not None:
+        ax.plot(x, y, marker=marker, ls='none', ms=size, mfc='none', mec=color, zorder=5)
     if label:
         ax.annotate(label, (x, y), xytext=(5, 5), textcoords='offset points', color=color, fontsize=FONT_SIZE, clip_on=True, zorder=6)
 
@@ -321,7 +322,7 @@ def main():
         for center, name, outline in snrs:
             if outline is not None:
                 draw_outline(ax, wcs, outline, 'cyan')
-            mark(ax, wcs, shape, center, name, 'cyan', 'o', 4)
+            mark(ax, wcs, shape, center, name, 'cyan', None)
         for name, center, outlines, color, linestyle in overlays:
             for outline in outlines:
                 draw_outline(ax, wcs, outline, color, linestyle)

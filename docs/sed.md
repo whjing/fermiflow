@@ -1,174 +1,113 @@
 # 全能段谱拟合与 SED
 
-## 确定空间模型后，进行全能段谱型比较
+流程为：选定空间模型 → 100 MeV–500 GeV 全能段谱型比较 → 逐能段拟合 → TS 筛选与重拟合。运行和统计解释的限制集中在[注意事项](notes.md)。
 
-选定最佳、或物理上需要保留的空间描述后，以它对应的 `<tag>_reloc_minuit.xml` 为起点分别建立 PowerLaw 和 LogParabola 模型。两次谱型拟合必须：
-
-1. 使用同一个最佳空间模型、RA/DEC 和延展尺度；
-2. 使用同一事件、能段、IRF、CCUBE、曝光图和背景源；
-3. 允许目标源的谱参数拟合；
-4. 对相同邻源使用相同的自由参数策略。
-
-谱型定义为：
-
-$$
-\frac{dN}{dE}=N_0\left(\frac{E}{E_0}\right)^{-\Gamma}
-\qquad \text{(PowerLaw)},
-$$
-
-$$
-\frac{dN}{dE}=N_0\left(\frac{E}{E_b}\right)^{-\left[\alpha+\beta\log(E/E_b)\right]}
-\qquad \text{(LogParabola)}.
-$$
-
-先复制全能段最佳空间模型，分别把目标源写成 PL 与 LP；不要在两个谱型文件中改变空间参数或其它源的清单。然后各自运行：
+## 多源谱型组合测试（spectral-grid）
 
 ```bash
-fermiflow run --config ../configs/fermitools_project.yaml --mode like \
-  --input-model ../shared/models/myTarget_bestspace_pl_input.xml
-
-fermiflow run --config ../configs/fermitools_project.yaml --mode like \
-  --input-model ../shared/models/myTarget_bestspace_lp_input.xml
+fermiflow init --mode spectral-grid --config ../configs/spectral_100MeV.yaml
 ```
 
-若 LP 比 PL 多一个自由参数，可报告：
+编辑配置：
 
-$$
-TS_{\rm curve}=2\left[(-\log L)_{\rm PL}-(-\log L)_{\rm LP}\right].
-$$
+```yaml
+base:
+  input_model: ../products_1GeV/spatial_grid/srcT-P-srcP-P-srcE-G/srcT-P-srcP-P-srcE-G_reloc_minuit.xml
+  project_config: proj_100MeV.yaml
+  output_root: ../products_100MeV/spectral_grid
+  # model_policy: model_policy_spectral.yaml
+sources:
+  - name: srcT
+    models: [pl, lp]
+  # - name: srcP
+  #   models: [pl, lp]
+slurm:
+  working_dir: ../scripts
+comparison:
+  reference: srcT-PL
+```
 
-但低显著性源、背景残差和不稳定高能 bin 都可能制造表观曲率，因此还必须检查下一步的 SED；不能只凭一个全能段 $TS_{\rm curve}$ 下物理解读。
+`sources` 每个源列出测试谱型，工具生成笛卡尔积：一个源两组、两个源四组、三个源八组；`models: [pl]` 表示该源只取一种谱型。支持 `pl/powerlaw` 和 `lp/logparabola`。
 
----
+```bash
+fermiflow spectral-grid --config ../configs/spectral_100MeV.yaml
+bash ../products_100MeV/spectral_grid/sbatch/submit_like.sh
+# 任务完成后
+fermiflow spectral-grid --config ../configs/spectral_100MeV.yaml --compare-likelihood --reference srcT-PL
+```
 
-## SED：固定空间，逐能段测量归一化
-
-### 选择正确的 SED 输入模板
-
-SED 的起点应是上文的**最佳全能段谱拟合结果**，通常是：
+多源时 reference 使用完整 tag，例如 `srcT-PL-srcP-PL`。命令行 reference 优先于 YAML；未指定时选最小 AIC。
 
 ```text
-myTarget_bestspace_pl_minuit.xml
+spectral_grid/
+├── spectral_grid_manifest.csv
+├── spectral_comparison.csv       # 比较阶段生成
+├── spectral_curvature.csv        # 有完成的PL/LP配对时生成
+├── sbatch/submit_like.sh
+├── logs/<tag>_like.log
+└── <tag>/
+    ├── <tag>_input.xml
+    ├── <tag>_srcmaps.fits
+    ├── <tag>_drmnfb.xml
+    └── <tag>_minuit.xml
 ```
 
-或在谱曲率显著时使用 LP 结果。把它复制到项目 `data/models/`，例如：
+转换保持参考能量处的通量和局部斜率，LP的 beta 从0开始；Scale/Eb 和全部空间参数固定。未受检源沿用模板的谱参数和自由状态；`base.model_policy` 可统一调整自由参数。每个任务使用1 CPU、`fermi` 环境，提交间隔3秒。
 
-```text
-shared/models/myTarget_sed_input.xml
-```
+PL 与 LP 的定义为：
 
-并在 `fermitools_project.yaml` 中设置：
+$$
+\frac{dN}{dE}=N_0(E/E_0)^{-\Gamma},
+\qquad
+\frac{dN}{dE}=N_0(E/E_b)^{-\alpha-\beta\ln(E/E_b)}.
+$$
+
+`spectral_comparison.csv` 包含 likelihood、k、ΔTS、Δk、ΔAIC、reference 和 notes。`--csv` 改变该表的输出路径。`spectral_curvature.csv` 在其他源谱型相同的条件下，逐源配对 PL 与 LP，输出 `ts_curve`、Δk和ΔAIC。
+
+## 分能段 SED
+
+将选定全能段谱拟合结果复制为 `shared/my_target_sed_input.xml`，在100MeV项目配置中设置：
 
 ```yaml
 files:
   base_gti: "{products_dir}/{analysis_name}_gti.fits"
-  sed_model: "{shared_dir}/models/myTarget_sed_input.xml"
+  sed_model: "{shared_dir}/my_target_sed_input.xml"
+summary:
+  sources: [srcT, srcP, srcE]
 ```
 
-### 每个 SED bin 应固定与放开的参数
-
-SED 点的目的不是在窄能段重新测量完整谱形或空间形状，而是在固定模板下测量强度。因此每个能段中应遵守：
-
-| 参数类别 | 建议 |
-| --- | --- |
-| 目标源 RA/DEC、Gaussian $\sigma$ 或 Disk $R$ | 固定为[空间拟合](spatial.md)的最佳空间值 |
-| 目标源 Index、alpha、beta、Scale、Eb | 固定为全能段最佳谱的值 |
-| 目标源归一化 | 放开 |
-| 邻源空间参数 | 固定 |
-| 邻源谱形 | 固定 |
-| 近处且在该 bin 有贡献的邻源归一化 | 可放开，但所有 bin 用同一套规则 |
-| Galactic / isotropic 归一化 | 常见做法是放开；所有 bin 保持一致 |
-| 低 TS 背景源 | 初次结果后可固定，并重新运行该 bin |
-
-换言之，SED 最理想的自由参数数量很少：目标源归一化、两个 diffuse normalizations，以及少量非常近/非常亮邻源的归一化。不要在每个 bin 再放开 `Index` 或 `alpha/beta`，否则得到的点不再是对同一个全能段谱模型的独立检验。
-
-首次生成第 $i$ 个对数等宽 bin：
+每个 bin 使用固定空间参数及全能段谱形，测量归一化。首次生成并拟合：
 
 ```bash
-fermiflow run --config ../configs/fermitools_project.yaml --mode bin --nbins 6 --ibin 1
+fermiflow run --config ../configs/proj_100MeV.yaml --mode bin --nbins 6 --ibin 1
 ```
 
-其它 bin 改变 `--ibin` 即可。建议先以 5--6 个 bin 开始；如果多数 bin 拟合失败或 TS 很低，优先减少 bin 数而不是强行解释噪声点。
-
-若先前一个 bin 中低 TS 源过多，可用该 bin 的结果固定背景源，随后只重跑该 bin：
-
-```bash
-fermiflow run --config ../configs/fermitools_project.yaml --mode bin-fit \
-  --nbins 6 --ibin 4 \
-  --input-model /absolute/path/myTarget_sed_bin04-mod_input.xml
-```
-
-`bin-fit` 会复用已经生成的 bin CCUBE/曝光图，但重新生成 source maps 并完成两次 gtlike；修改空间模板、源清单或任意 XML 后不能复用旧 source maps。
-
-### 绘制与解释 SED
-
-SED 的纵轴通常是：
-
-$$
-E^2\frac{dN}{dE}
-\quad [\mathrm{erg\ cm^{-2}\ s^{-1}}],
-$$
-
-其中微分光子通量（differential photon flux）为 $dN/dE$，单位通常为 $\mathrm{ph\ cm^{-2}\ s^{-1}\ MeV^{-1}}$。全能段积分 photon flux 与 energy flux 不能直接当作一个 SED 点。
-
-当某 bin 的 TS 低（常用阈值是 4 或 5）、通量非正或通量误差大于通量时，可按分析规则报告实际算出的 95% 上限。缺少正式上限时应标记或跳过该点。SED 应同时叠加上文的 PL/LP 全能段曲线；若要画 butterfly，必须使用拟合协方差矩阵或 profile likelihood，而不是只独立传播单个参数误差。
-
----
-
+`ibin` 从1到6分别执行，输出按能段放在 `products_100MeV/bin_*/`。源摘要由 `summary.sources` 控制，包含TS、photon flux、energy flux和谱参数。
 
 ## 按 TS 筛选并重跑
-
-先完成每个 bin 的第一轮拟合，获得对应的 `*_minuit_results.dat`。随后创建配置：
 
 ```bash
 fermiflow init --mode sed-filter --config ../configs/sed_filter.yaml
 ```
 
-在 `jobs:` 中**手动**写入每一组 `ibin`、`input_model` 和 `results_file`。同一项中的 XML 与 results 文件必须来自同一个能段；工具不会自动扫描或猜测配对关系。运行：
+在 `jobs` 中手动配对 `ibin`、原输入 XML 与该 bin 的 `*_minuit_results.dat`，设置 `ts_threshold`。`keep_normalization_sources` 指定保留归一化原有自由状态的源。
 
 ```bash
 fermiflow sed-filter --config ../configs/sed_filter.yaml
-```
-
-它会对 TS 小于 `ts_threshold` 的源固定参数，生成 `*-tsltX_input.xml`。指定在 `keep_normalization_sources` 中的源即使 TS 较低，也只固定谱形和空间参数，保留其归一化参数原有的 free/fixed 状态。每个新 XML 都会打印修改前后的自由参数总数。
-
-确认新 XML 后，使用同一份 YAML 生成每个 `bin-fit` 的 `.sbatch` 文件与总提交脚本：
-
-```bash
 fermiflow sed-submit --config ../configs/sed_filter.yaml
-```
-
-`sed-submit` 只生成脚本，不会自动提交任务。检查后运行：
-
-```bash
 bash ../sbatch/sed_6bin_tslt2/submit_sed_filter.sh
 ```
 
-该脚本在每两个 Slurm 任务之间固定等待 3 秒；这是内置行为，无需也不能通过 YAML 设置。
-
-## 辅助脚本
-
-- `scripts/filter_sed_from_logs.py`：从 SED 日志读取 TS，固定低显著性背景源并生成 `-mod_input.xml`。
-- `scripts/plot_sed.py`：读取 SED 日志和全能段 XML，绘制 (E^2dN/dE)、上限及近似谱误差带。
-- `scripts/compare_likelihood.py`：修改文件顶部的 `models` 字典后，计算相对模型的 (2\Delta\log\mathcal{L})。
-
-这三项是可编辑的分析辅助脚本；用于新目标前，请先修改脚本顶部的目标名、输入 XML、日志和输出路径，避免写入其它项目的产品目录。
-
-## 多源谱型组合测试（spectral-grid）
-
-先准备100 MeV--500 GeV的项目配置、GTI、CCUBE和曝光；高能段的最终空间XML可以作为固定形态模板。`base.project_config` 决定实际分析能段，不能把1GeV的计数立方体用于100MeV分析。
+筛选后生成 `*-tsltX_input.xml` 并打印自由参数修改前后数量。重拟合任务通过 `bin-fit` 使用新 XML，提交间隔3秒。单个 bin 也可直接运行：
 
 ```bash
-fermiflow init --mode spectral-grid --config ../configs/spectral_100MeV.yaml
-# 编辑input_model、project_config、output_root和sources
-fermiflow spectral-grid --config ../configs/spectral_100MeV.yaml
-bash ../products_100MeV/spectral_grid/sbatch/submit_like.sh
-# 等待完成后比较
-fermiflow spectral-grid --config ../configs/spectral_100MeV.yaml --compare-likelihood --reference srcT-PL
+fermiflow run --config ../configs/proj_100MeV.yaml --mode bin-fit --nbins 6 --ibin 4 --input-model ../products_100MeV/bin_04_.../my_target_sed_6bin04-tslt2_input.xml
 ```
 
-`sources: [{name: srcT, models: [pl, lp]}]` 生成2组；再添加srcP的[pl,lp]生成4组。支持pl/powerlaw、lp/logparabola。文件名保留源名，组合如 `srcT-PL-srcP-LP`。每组XML与拟合产物放在 `output_root/<tag>/`，任务和日志在 `output_root/sbatch/`、`output_root/logs/`。默认1CPU、fermi环境，手动提交脚本每次间隔3秒；重复提交覆盖同名日志。
+## 绘图辅助脚本
 
-转换保持参考能量处的通量和局部谱斜率；LP的beta从0开始。参考能量Scale/Eb及全部空间参数固定；未受检源的谱参数和自由状态沿用模板。可用base.model_policy统一背景自由状态，策略执行后空间参数仍强制固定。当前仅支持PowerLaw/LogParabola输入。
+- `scripts/plot_sed.py`：日志数据点、上限、全能段曲线和近似误差带。
+- `scripts/filter_sed_from_logs.py`：读取日志筛选低TS源的分析辅助脚本。
+- `scripts/compare_likelihood.py`：指定模型数值，计算相对likelihood差异。
 
-比较从MINUIT完成标记之前的likelihood和最终XML读取自由参数数目k，避免混用之后summary的likelihood。未完成任务跳过，警告写入notes；最小AIC默认作为基准，也可通过--reference指定。导出spectral_comparison.csv（可用--csv改路径）及逐源spectral_curvature.csv。ΔTS=2(logL_model−logL_ref)，ΔAIC=2Δk−ΔTS。曲率比较只匹配其他源谱型相同、单个源PL/LP不同的组合；不自动换算sigma。使用相同事件、背景和自由参数策略比较，并检查收敛与边界；空间拟合阶段估计的参数不计入这里固定形态谱比较的k。
+辅助脚本的输入、源名与输出路径在脚本中填写。SED 纵轴通常为 \(E^2dN/dE\)，单位 \(\mathrm{erg\,cm^{-2}\,s^{-1}}\)。

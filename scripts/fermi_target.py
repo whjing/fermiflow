@@ -626,6 +626,15 @@ class FermiTarget:
         if ret_code != 0:
             logger.warning(f"MINUIT return code: {ret_code}")
 
+        # Save the Python refit's parameters before TS/upper-limit scans.
+        # Keep the command-line MINUIT checkpoint unchanged.
+        model_stem, model_ext = os.path.splitext(str(model_file))
+        if model_stem.endswith("_minuit"):
+            model_stem = model_stem[:-len("_minuit")]
+        summary_model = model_stem + "_summary" + (model_ext or ".xml")
+        like.logLike.writeXml(summary_model)
+        logger.info("Python summary fit model: %s", summary_model)
+
         neg_log_likelihood = -like.logLike.value()
         ts_values = {}
 
