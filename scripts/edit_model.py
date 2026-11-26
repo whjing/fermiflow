@@ -53,24 +53,24 @@ def source_position(source):
 
 
 def source_distance_deg(source, radial):
-    """Return distance from the requested center, in degrees.
+    """Use coordinates when available, otherwise the catalogue ROI distance.
 
-    Catalog XMLs created for an ROI normally carry ``ROI_Center_Distance``.
-    That value is preferred when no alternative center was requested.
+    ROI_Center_Distance assumes the catalogue and policy use the same centre.
+    It supplies a separation only, not a sky position.
     """
     center = radial.get("center")
     if center is not None:
         position = source_position(source)
-        if position is None:
-            return None
-        return angular_separation_deg(
-            position[0], position[1], center["ra"], center["dec"]
-        )
+        if position is not None:
+            return angular_separation_deg(
+                position[0], position[1], center["ra"], center["dec"]
+            )
 
     try:
-        return float(source.get("ROI_Center_Distance"))
+        distance = float(source.get("ROI_Center_Distance"))
     except (TypeError, ValueError):
         return None
+    return distance if math.isfinite(distance) and distance >= 0 else None
 
 
 def policy_from_radial(source, radial):
@@ -92,7 +92,8 @@ def set_source_policy(source, policy):
     """Set one source's spectral freedom and return the number of changes.
 
     ``spectral`` means all fitted spectral parameters except the pivot/scale energy;
-    spatial parameters remain fixed in every policy.
+    PLSuperExpCutoff4 only frees normalization, IndexS and ExpfactorS;
+    Index2 and spatial parameters remain fixed in every policy.
     """
     policy = policy.lower()
     if policy not in {"spectral", "norm", "fixed"}:
@@ -118,6 +119,11 @@ def set_source_policy(source, policy):
                 new_value = "1"
             elif policy == "norm" and parameter is norm_parameter:
                 new_value = "1"
+            if spectrum.get("type") == "PLSuperExpCutoff4":
+                if name == "index2":
+                    new_value = "0"
+                elif policy == "spectral" and parameter is not norm_parameter and name not in {"indexs", "expfactors"}:
+                    new_value = "0"
         if parameter.get("free") != new_value:
             parameter.set("free", new_value)
             changed += 1
